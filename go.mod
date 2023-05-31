@@ -11,13 +11,15 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.15.1
 	go.uber.org/zap v1.24.0
-	k8s.io/api v0.26.1
+	k8s.io/api v0.26.3
 	k8s.io/apiextensions-apiserver v0.26.1
-	k8s.io/apimachinery v0.26.1
-	k8s.io/client-go v0.26.1
-	k8s.io/utils v0.0.0-20230202215443-34013725500c // latest
-	sigs.k8s.io/controller-runtime v0.14.4
+	k8s.io/apimachinery v0.26.3
+	k8s.io/client-go v0.26.3
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749 // latest
+	sigs.k8s.io/controller-runtime v0.14.5
 )
+
+require github.com/medik8s/common v1.0.0
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -52,6 +54,7 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
+	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
