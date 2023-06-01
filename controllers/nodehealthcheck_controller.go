@@ -176,6 +176,7 @@ func conditionsNeedReconcile(oldConditions, newConditions []v1.NodeCondition) bo
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get;list;watch
 // +kubebuilder:rbac:groups=machine.openshift.io,resources=machines,verbs=get;list;watch
 // +kubebuilder:rbac:groups=machine.openshift.io,resources=machinehealthchecks,verbs=get;list;watch
+// +kubebuilder:rbac:groups="coordination.k8s.io",resources=leases,verbs=get;list;update;patch;watch;create;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -194,7 +195,8 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return result, err
 	}
 
-	resourceManager := resources.NewManager(r.Client, ctx, r.Log, r.OnOpenShift)
+	leaseManager := resources.NewLeaseManager(r.Client, log)
+	resourceManager := resources.NewManager(r.Client, ctx, r.Log, r.OnOpenShift, leaseManager)
 
 	// always check if we need to patch status before we exit Reconcile
 	nhcOrig := nhc.DeepCopy()
@@ -214,6 +216,10 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 		}
 		log.Info("reconcile end", "error", returnErr, "requeue", result.Requeue, "requeuAfter", result.RequeueAfter)
+	}()
+
+	defer func() {
+		result.RequeueAfter, returnErr = leaseManager.UpdateReconcileResults(ctx, nhc, result.RequeueAfter, returnErr)
 	}()
 
 	// set counters to zero for disabled NHC
@@ -459,13 +465,20 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 	}
 
 	// create remediation CR
-	created, err := rm.CreateRemediationCR(remediationCR, nhc)
+	created, leaseRequeueTimeout, err := rm.CreateRemediationCR(remediationCR, nhc)
 	if err != nil {
 		if _, ok := err.(resources.RemediationCRNotOwned); ok {
 			// CR exists but not owned by us, nothing to do
 			return nil, nil
 		}
 		return nil, errors.Wrapf(err, "failed to create remediation CR")
+	} else {
+		isLeaseObtained := leaseRequeueTimeout != nil && created
+		isCrAlreadyExist := !created && leaseRequeueTimeout == nil
+		if !isLeaseObtained && !isCrAlreadyExist {
+			resources.UpdateStatusNodeUnhealthy(node, nhc)
+			return leaseRequeueTimeout, nil
+		}
 	}
 
 	// always update status, in case patching it failed during last reconcile
@@ -478,14 +491,13 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 			// come back when timeout expires
 			requeueIn = pointer.Duration(*timeout + 1*time.Second)
 		}
-		return requeueIn, nil
+		return minDuration(leaseRequeueTimeout, requeueIn), nil
 	}
-
 	// CR already exists, check for timeout in case we need to
 	if timeout == nil {
 		// no timeout set for classic remediation
 		// nothing to do anymore here
-		return nil, nil
+		return leaseRequeueTimeout, nil
 	}
 
 	// Having a timeout also means we are using escalating remediations, for which we need to look at the "Succeeded"
@@ -518,7 +530,7 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 
 	if !timedOut && !failed {
 		// not timed out yet, come back when we do so
-		return pointer.Duration(timeoutAt.Sub(now.Time)), nil
+		return minDuration(leaseRequeueTimeout, pointer.Duration(timeoutAt.Sub(now.Time))), nil
 	}
 
 	// handle timeout and failure
@@ -544,6 +556,18 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 
 	// try next remediation asap
 	return pointer.Duration(1 * time.Second), nil
+}
+
+func minDuration(first *time.Duration, second *time.Duration) *time.Duration {
+	if first == nil {
+		return second
+	} else if second == nil {
+		return first
+	} else if *first < *second {
+		return first
+	} else {
+		return second
+	}
 }
 
 func (r *NodeHealthCheckReconciler) isControlPlaneRemediationAllowed(node *v1.Node, nhc *remediationv1alpha1.NodeHealthCheck, rm resources.Manager) (bool, error) {
