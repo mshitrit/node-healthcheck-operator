@@ -195,7 +195,10 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return result, err
 	}
 
-	leaseManager := resources.NewLeaseManager(r.Client, log)
+	leaseManager, err := resources.NewLeaseManager(r.Client, log)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	resourceManager := resources.NewManager(r.Client, ctx, r.Log, r.OnOpenShift, leaseManager)
 
 	// always check if we need to patch status before we exit Reconcile

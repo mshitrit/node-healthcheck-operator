@@ -59,6 +59,7 @@ import (
 const (
 	DeploymentNamespace = "testns"
 	MachineNamespace    = "openshift-machine-api"
+	leaseNs             = "medik8s-leases"
 )
 
 var cfg *rest.Config

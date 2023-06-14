@@ -214,7 +214,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 			//cleanup lease
 			lease := &coordv1.Lease{}
-			err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: DeploymentNamespace, Name: leaseName}, lease)
+			err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: leaseNs, Name: leaseName}, lease)
 			if err == nil {
 				err = k8sClient.Delete(context.Background(), lease)
 				Expect(err).NotTo(HaveOccurred())
@@ -460,7 +460,7 @@ var _ = Describe("Node Health Check CR", func() {
 						Expect(err).ToNot(HaveOccurred())
 						//Verify lease exist
 						lease := &coordv1.Lease{}
-						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 						Expect(err).ToNot(HaveOccurred())
 
 						//Mock node becoming healthy
@@ -484,7 +484,7 @@ var _ = Describe("Node Health Check CR", func() {
 							time.Second, time.Millisecond*100).Should(BeTrue())
 
 						//Verify NHC removed the lease
-						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 						Expect(errors.IsNotFound(err)).To(BeTrue())
 					})
 				})
@@ -495,7 +495,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 						//Create a mock lease that is already taken
 						now := metav1.NowMicro()
-						lease := &coordv1.Lease{ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: DeploymentNamespace}, Spec: coordv1.LeaseSpec{HolderIdentity: pointer.String("notNHC"), LeaseDurationSeconds: &otherLeaseDurationInSeconds, RenewTime: &now, AcquireTime: &now}}
+						lease := &coordv1.Lease{ObjectMeta: metav1.ObjectMeta{Name: leaseName, Namespace: leaseNs}, Spec: coordv1.LeaseSpec{HolderIdentity: pointer.String("notNHC"), LeaseDurationSeconds: &otherLeaseDurationInSeconds, RenewTime: &now, AcquireTime: &now}}
 						err := k8sClient.Create(context.Background(), lease)
 						Expect(err).NotTo(HaveOccurred())
 					})
@@ -529,7 +529,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 						//Verifying lease is created
 						lease := &coordv1.Lease{}
-						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(*lease.Spec.HolderIdentity).To(Equal("NHC"))
 						Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(2 + 1 /*2 seconds is DefaultLeaseDuration (mocked) + 1 second buffer (mocked)  */)))
@@ -542,7 +542,7 @@ var _ = Describe("Node Health Check CR", func() {
 						//Wait for lease to be extended
 						time.Sleep(timeLeftForLease * 3 / 4)
 						lease = &coordv1.Lease{}
-						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 						//Verify NHC extended the lease
 						Expect(err).ToNot(HaveOccurred())
 						Expect(*lease.Spec.AcquireTime).ToNot(Equal(*lease.Spec.RenewTime))
@@ -551,7 +551,7 @@ var _ = Describe("Node Health Check CR", func() {
 						//Wait for lease to expire
 						time.Sleep(timeLeftForLease/4 + time.Millisecond*100)
 						lease = &coordv1.Lease{}
-						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+						err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 						//Verify NHC removed the lease
 						Expect(errors.IsNotFound(err)).To(BeTrue())
 
@@ -636,7 +636,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 				//Verify lease is created
 				lease := &coordv1.Lease{}
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(5 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
@@ -673,7 +673,7 @@ var _ = Describe("Node Health Check CR", func() {
 				Expect(underTest.Status.UnhealthyNodes[0].Remediations[1].TimedOut).To(BeNil())
 
 				//Verify lease was extended
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(5 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
@@ -698,7 +698,7 @@ var _ = Describe("Node Health Check CR", func() {
 				wrongDurationUntilLeaseExpires := leaseWrongExpireTimeShort.Sub(time.Now())
 				time.Sleep(wrongDurationUntilLeaseExpires + time.Second)
 				//Verify lease still exist (since long expire time wasn't reached)
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(5 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
@@ -717,7 +717,7 @@ var _ = Describe("Node Health Check CR", func() {
 				//Verify lease has time left before it should expire
 				Expect(timeLeftOnLease > time.Millisecond*500).To(BeTrue()) // a bit over 1 second at this stage
 				//Verify lease was removed because the CR was deleted (even though there was some time left)
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, lease)
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 
 				// get updated NHC

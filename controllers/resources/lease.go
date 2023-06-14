@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	remediationv1alpha1 "github.com/medik8s/node-healthcheck-operator/api/v1alpha1"
-	"github.com/medik8s/node-healthcheck-operator/controllers/utils"
 )
 
 var (
@@ -47,14 +46,17 @@ type nhcLeaseManager struct {
 	log                logr.Logger
 }
 
-func NewLeaseManager(client client.Client, log logr.Logger) LeaseManager {
-	//not checking error since was already checked at init phase (at controllers/initializer/init.Start)
-	ns, _ := utils.GetDeploymentNamespace()
+func NewLeaseManager(client client.Client, log logr.Logger) (LeaseManager, error) {
+	newManager, err := lease.NewManager(client, holderIdentity)
+	if err != nil {
+		log.Error(err, "couldn't initialize lease manager")
+		return nil, err
+	}
 	return &nhcLeaseManager{
 		client:             client,
-		commonLeaseManager: lease.NewManager(client, holderIdentity, ns),
+		commonLeaseManager: newManager,
 		log:                log.WithName("nhc lease manager"),
-	}
+	}, nil
 }
 
 func (m *nhcLeaseManager) ObtainNodeLease(remediationCR *unstructured.Unstructured, nhc *remediationv1alpha1.NodeHealthCheck) (bool, *time.Duration, error) {
