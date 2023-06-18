@@ -205,7 +205,9 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	nhcOrig := nhc.DeepCopy()
 	var finalRequeueAfter *time.Duration
 	defer func() {
-		finalRequeueAfter = utils.MinDuration(&result.RequeueAfter, finalRequeueAfter)
+		if result.RequeueAfter > 0 {
+			finalRequeueAfter = utils.MinDuration(&result.RequeueAfter, finalRequeueAfter)
+		}
 		if finalRequeueAfter != nil {
 			result.RequeueAfter = *finalRequeueAfter
 		}
@@ -562,6 +564,7 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 	return pointer.Duration(1 * time.Second), nil
 }
 
+// TODO mshitrit replace with utils.MinDuration
 func minDuration(first *time.Duration, second *time.Duration) *time.Duration {
 	if first == nil {
 		return second
