@@ -500,7 +500,8 @@ var _ = Describe("Node Health Check CR", func() {
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					It("a remediation CR isn't created", func() {
+					FIt("a remediation CR isn't created", func() {
+						go debugLeaseLifeCycle(leaseName)
 						cr := newRemediationCR(unhealthyNodeName, underTest)
 						err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
 						Expect(errors.IsNotFound(err)).To(BeTrue())
@@ -1162,6 +1163,16 @@ func mockLeaseParams(mockRequeueDurationIfLeaseTaken, mockDefaultLeaseDuration, 
 	resources.DefaultLeaseDuration = mockDefaultLeaseDuration
 	resources.LeaseBuffer = mockLeaseBuffer
 
+	ns := &v1.Namespace{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseNs}, ns); err != nil {
+		if errors.IsNotFound(err) {
+			ns.Name = leaseNs
+			err := k8sClient.Create(context.Background(), ns)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+	}
+
 	DeferCleanup(func() {
 		resources.RequeueIfLeaseTaken = orgRequeueIfLeaseTaken
 		resources.DefaultLeaseDuration = orgDefaultLeaseDuration
@@ -1287,4 +1298,40 @@ func newNode(name string, t v1.NodeConditionType, s v1.ConditionStatus, isContro
 			},
 		},
 	}
+}
+
+func debugLeaseLifeCycle(leaseName string) {
+	oldLease, currentLease := &coordv1.Lease{}, &coordv1.Lease{}
+	count := 0
+	isFoundPreviously := true
+	for {
+		count++
+		time.Sleep(time.Millisecond * 100)
+		now := time.Now()
+		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, currentLease); err != nil {
+			if isFoundPreviously {
+				fmt.Println(fmt.Sprintf("####### Lease NOT found at %q iteration number: %d #######", now, count))
+			}
+			isFoundPreviously = false
+		} else if oldLease.Spec.RenewTime == nil { //first lease
+			oldLease = currentLease.DeepCopy()
+			isFoundPreviously = true
+			fmt.Println(fmt.Sprintf("####### Lease found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
+
+		} else if currentLease.Spec.RenewTime.Sub(oldLease.Spec.RenewTime.Time) == 0 {
+			isFoundPreviously = true
+			if count%10 == 0 {
+				fmt.Println(fmt.Sprintf("####### Lease STILL found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
+			}
+		} else if currentLease.Spec.RenewTime.Sub(oldLease.Spec.RenewTime.Time) > 0 {
+			isFoundPreviously = true
+			oldLease = currentLease.DeepCopy()
+			fmt.Println(fmt.Sprintf("####### Lease RENEWED at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
+		} else {
+			isFoundPreviously = true
+			fmt.Println(fmt.Sprintf("####### SHOULDN'T HAPPEN Lease found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
+		}
+
+	}
+
 }
