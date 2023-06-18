@@ -205,6 +205,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	nhcOrig := nhc.DeepCopy()
 	var finalRequeueAfter *time.Duration
 	defer func() {
+		finalRequeueAfter = utils.MinDuration(&result.RequeueAfter, finalRequeueAfter)
 		if finalRequeueAfter != nil {
 			result.RequeueAfter = *finalRequeueAfter
 		}
