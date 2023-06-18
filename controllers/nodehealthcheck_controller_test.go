@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -500,7 +501,7 @@ var _ = Describe("Node Health Check CR", func() {
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					FIt("a remediation CR isn't created", func() {
+					It("a remediation CR isn't created", func() {
 						go debugLeaseLifeCycle(leaseName)
 						cr := newRemediationCR(unhealthyNodeName, underTest)
 						err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
@@ -521,6 +522,7 @@ var _ = Describe("Node Health Check CR", func() {
 								HaveField("Status", metav1.ConditionFalse),
 								HaveField("Reason", v1alpha1.ConditionReasonEnabled),
 							)))
+						//debugDelay()
 						//expecting NHC to acquire the lease now and create the CR - checking CR first
 						Eventually(
 							func() error {
@@ -539,7 +541,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 						leaseExpireTime := lease.Spec.AcquireTime.Time.Add(mockRequeueDurationIfLeaseTaken*3 + mockLeaseBuffer)
 						timeLeftForLease := leaseExpireTime.Sub(time.Now())
-
+						//debugDelay()
 						//Wait for lease to be extended
 						time.Sleep(timeLeftForLease * 3 / 4)
 						lease = &coordv1.Lease{}
@@ -611,8 +613,16 @@ var _ = Describe("Node Health Check CR", func() {
 
 			})
 
-			It("it should try one remediation after another", func() {
+			FIt("it should try one remediation after another", func() {
 				cr := newRemediationCR(unhealthyNodeName, underTest)
+				go debugUnstructured(
+					func() (*unstructured.Unstructured, error) {
+						us := &unstructured.Unstructured{}
+						if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), us); err != nil {
+							return nil, err
+						}
+						return us, nil
+					})
 				// first call should fail, because the node gets unready in a few seconds only
 				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
 				Expect(errors.IsNotFound(err)).To(BeTrue())
@@ -1154,6 +1164,12 @@ var _ = Describe("Node Health Check CR", func() {
 	})
 })
 
+func debugDelay() {
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+	}
+}
+
 func mockLeaseParams(mockRequeueDurationIfLeaseTaken, mockDefaultLeaseDuration, mockLeaseBuffer time.Duration) {
 	orgRequeueIfLeaseTaken := resources.RequeueIfLeaseTaken
 	orgDefaultLeaseDuration := resources.DefaultLeaseDuration
@@ -1300,6 +1316,40 @@ func newNode(name string, t v1.NodeConditionType, s v1.ConditionStatus, isContro
 	}
 }
 
+// TODO mshitrit remove
+func debugUnstructured(fetch func() (*unstructured.Unstructured, error)) {
+	oldLease, currentLease := &unstructured.Unstructured{}, &unstructured.Unstructured{}
+	var err error
+	count := 0
+	isFoundPreviously := true
+	for {
+		count++
+		time.Sleep(time.Millisecond * 100)
+		now := time.Now()
+		currentLease, err = fetch()
+		if err != nil {
+			if isFoundPreviously {
+				fmt.Println(fmt.Sprintf("####### Element NOT found at %q iteration number: %d #######", now, count))
+			} else if count%10 == 0 {
+				fmt.Println(fmt.Sprintf("####### Element STILL NOT found at %q iteration number: %d #######", now, count))
+			}
+			isFoundPreviously = false
+		} else if reflect.DeepEqual(currentLease, oldLease) {
+			isFoundPreviously = true
+			if count%10 == 0 {
+				fmt.Println(fmt.Sprintf("####### Element STILL found at %q iteration number: %d , Element:%s  #######", now, count, currentLease))
+			}
+		} else { //first lease
+			oldLease = currentLease.DeepCopy()
+			isFoundPreviously = true
+			fmt.Println(fmt.Sprintf("####### Element CHANGED at %q iteration number: %d , Element:%s  #######", now, count, currentLease))
+
+		}
+	}
+
+}
+
+// TODO mshitrit remove
 func debugLeaseLifeCycle(leaseName string) {
 	oldLease, currentLease := &coordv1.Lease{}, &coordv1.Lease{}
 	count := 0
@@ -1308,7 +1358,7 @@ func debugLeaseLifeCycle(leaseName string) {
 		count++
 		time.Sleep(time.Millisecond * 100)
 		now := time.Now()
-		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: DeploymentNamespace}, currentLease); err != nil {
+		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, currentLease); err != nil {
 			if isFoundPreviously {
 				fmt.Println(fmt.Sprintf("####### Lease NOT found at %q iteration number: %d #######", now, count))
 			}
