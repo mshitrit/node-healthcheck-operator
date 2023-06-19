@@ -613,16 +613,18 @@ var _ = Describe("Node Health Check CR", func() {
 
 			})
 
-			FIt("it should try one remediation after another", func() {
+			It("it should try one remediation after another", func() {
+				//go debugLeaseLifeCycle(leaseName)
 				cr := newRemediationCR(unhealthyNodeName, underTest)
-				go debugUnstructured(
-					func() (*unstructured.Unstructured, error) {
-						us := &unstructured.Unstructured{}
-						if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), us); err != nil {
-							return nil, err
-						}
-						return us, nil
-					})
+				//TODO mshitrit cleanup
+				/*go debugUnstructured(
+				func() (*unstructured.Unstructured, error) {
+					us := &unstructured.Unstructured{}
+					if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), us); err != nil {
+						return nil, err
+					}
+					return us, nil
+				})*/
 				// first call should fail, because the node gets unready in a few seconds only
 				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
 				Expect(errors.IsNotFound(err)).To(BeTrue())
@@ -686,7 +688,8 @@ var _ = Describe("Node Health Check CR", func() {
 				//Verify lease was extended
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(5 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
+				//TODO mshitrit replace 15 with const
+				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(15 + mockLeaseBuffer.Seconds()) /*First escalation timeout (15) + buffer (1) */))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
 				Expect(lease.Spec.RenewTime.Sub(lease.Spec.AcquireTime.Time) > 0).To(BeTrue())
 
@@ -711,7 +714,7 @@ var _ = Describe("Node Health Check CR", func() {
 				//Verify lease still exist (since long expire time wasn't reached)
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(5 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
+				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(15 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
 
 				// make node healthy
