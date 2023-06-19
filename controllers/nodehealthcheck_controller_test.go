@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -502,7 +501,6 @@ var _ = Describe("Node Health Check CR", func() {
 					})
 
 					It("a remediation CR isn't created", func() {
-						go debugLeaseLifeCycle(leaseName)
 						cr := newRemediationCR(unhealthyNodeName, underTest)
 						err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
 						Expect(errors.IsNotFound(err)).To(BeTrue())
@@ -583,8 +581,8 @@ var _ = Describe("Node Health Check CR", func() {
 		})
 
 		Context("with multiple escalating remediations", func() {
-			longerRemediationTimeout := 5 * time.Second
-			shorterRemediationTimeout := 3 * time.Second
+			firstRemediationTimeout := 5 * time.Second
+			secondRemediationTimeout := 15 * time.Second
 			BeforeEach(func() {
 				mockLeaseParams(mockRequeueDurationIfLeaseTaken, mockDefaultLeaseDuration, mockLeaseBuffer)
 
@@ -600,12 +598,12 @@ var _ = Describe("Node Health Check CR", func() {
 					{
 						RemediationTemplate: *templateRef1,
 						Order:               0,
-						Timeout:             metav1.Duration{Duration: longerRemediationTimeout},
+						Timeout:             metav1.Duration{Duration: firstRemediationTimeout},
 					},
 					{
 						RemediationTemplate: *templateRef2,
 						Order:               5,
-						Timeout:             metav1.Duration{Duration: 15 * time.Second /*shorterRemediationTimeout*/},
+						Timeout:             metav1.Duration{Duration: secondRemediationTimeout},
 					},
 				}
 
@@ -614,17 +612,7 @@ var _ = Describe("Node Health Check CR", func() {
 			})
 
 			It("it should try one remediation after another", func() {
-				//go debugLeaseLifeCycle(leaseName)
 				cr := newRemediationCR(unhealthyNodeName, underTest)
-				//TODO mshitrit cleanup
-				/*go debugUnstructured(
-				func() (*unstructured.Unstructured, error) {
-					us := &unstructured.Unstructured{}
-					if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), us); err != nil {
-						return nil, err
-					}
-					return us, nil
-				})*/
 				// first call should fail, because the node gets unready in a few seconds only
 				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cr), cr)
 				Expect(errors.IsNotFound(err)).To(BeTrue())
@@ -688,8 +676,7 @@ var _ = Describe("Node Health Check CR", func() {
 				//Verify lease was extended
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
-				//TODO mshitrit replace 15 with const
-				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(15 + mockLeaseBuffer.Seconds()) /*First escalation timeout (15) + buffer (1) */))
+				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(secondRemediationTimeout.Seconds() + mockLeaseBuffer.Seconds())))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
 				Expect(lease.Spec.RenewTime.Sub(lease.Spec.AcquireTime.Time) > 0).To(BeTrue())
 
@@ -707,14 +694,14 @@ var _ = Describe("Node Health Check CR", func() {
 				Expect(underTest.Status.Phase).To(Equal(v1alpha1.PhaseRemediating))
 
 				//Incorrect lease expire time calculated with short remediation timeout instead of long one
-				leaseWrongExpireTimeShort := lease.Spec.AcquireTime.Time.Add(shorterRemediationTimeout*3 + mockLeaseBuffer /*longest remediation timeout (5) multiply by tries (3) and added buffer*/)
+				leaseWrongExpireTimeShort := lease.Spec.AcquireTime.Time.Add(firstRemediationTimeout*3 + mockLeaseBuffer /*longest remediation timeout (5) multiply by tries (3) and added buffer*/)
 
 				wrongDurationUntilLeaseExpires := leaseWrongExpireTimeShort.Sub(time.Now())
 				time.Sleep(wrongDurationUntilLeaseExpires + time.Second)
 				//Verify lease still exist (since long expire time wasn't reached)
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, lease)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(15 + mockLeaseBuffer.Seconds()) /*First escalation timeout (5) + buffer (1) */))
+				Expect(*lease.Spec.LeaseDurationSeconds).To(Equal(int32(secondRemediationTimeout.Seconds() + mockLeaseBuffer.Seconds())))
 				Expect(lease.Spec.AcquireTime).ToNot(BeNil())
 
 				// make node healthy
@@ -1167,12 +1154,6 @@ var _ = Describe("Node Health Check CR", func() {
 	})
 })
 
-func debugDelay() {
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-	}
-}
-
 func mockLeaseParams(mockRequeueDurationIfLeaseTaken, mockDefaultLeaseDuration, mockLeaseBuffer time.Duration) {
 	orgRequeueIfLeaseTaken := resources.RequeueIfLeaseTaken
 	orgDefaultLeaseDuration := resources.DefaultLeaseDuration
@@ -1317,74 +1298,4 @@ func newNode(name string, t v1.NodeConditionType, s v1.ConditionStatus, isContro
 			},
 		},
 	}
-}
-
-// TODO mshitrit remove
-func debugUnstructured(fetch func() (*unstructured.Unstructured, error)) {
-	oldLease, currentLease := &unstructured.Unstructured{}, &unstructured.Unstructured{}
-	var err error
-	count := 0
-	isFoundPreviously := true
-	for {
-		count++
-		time.Sleep(time.Millisecond * 100)
-		now := time.Now()
-		currentLease, err = fetch()
-		if err != nil {
-			if isFoundPreviously {
-				fmt.Println(fmt.Sprintf("####### Element NOT found at %q iteration number: %d #######", now, count))
-			} else if count%10 == 0 {
-				fmt.Println(fmt.Sprintf("####### Element STILL NOT found at %q iteration number: %d #######", now, count))
-			}
-			isFoundPreviously = false
-		} else if reflect.DeepEqual(currentLease, oldLease) {
-			isFoundPreviously = true
-			if count%10 == 0 {
-				fmt.Println(fmt.Sprintf("####### Element STILL found at %q iteration number: %d , Element:%s  #######", now, count, currentLease))
-			}
-		} else { //first lease
-			oldLease = currentLease.DeepCopy()
-			isFoundPreviously = true
-			fmt.Println(fmt.Sprintf("####### Element CHANGED at %q iteration number: %d , Element:%s  #######", now, count, currentLease))
-
-		}
-	}
-
-}
-
-// TODO mshitrit remove
-func debugLeaseLifeCycle(leaseName string) {
-	oldLease, currentLease := &coordv1.Lease{}, &coordv1.Lease{}
-	count := 0
-	isFoundPreviously := true
-	for {
-		count++
-		time.Sleep(time.Millisecond * 100)
-		now := time.Now()
-		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: leaseName, Namespace: leaseNs}, currentLease); err != nil {
-			if isFoundPreviously {
-				fmt.Println(fmt.Sprintf("####### Lease NOT found at %q iteration number: %d #######", now, count))
-			}
-			isFoundPreviously = false
-		} else if oldLease.Spec.RenewTime == nil { //first lease
-			oldLease = currentLease.DeepCopy()
-			isFoundPreviously = true
-			fmt.Println(fmt.Sprintf("####### Lease found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
-
-		} else if currentLease.Spec.RenewTime.Sub(oldLease.Spec.RenewTime.Time) == 0 {
-			isFoundPreviously = true
-			if count%10 == 0 {
-				fmt.Println(fmt.Sprintf("####### Lease STILL found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
-			}
-		} else if currentLease.Spec.RenewTime.Sub(oldLease.Spec.RenewTime.Time) > 0 {
-			isFoundPreviously = true
-			oldLease = currentLease.DeepCopy()
-			fmt.Println(fmt.Sprintf("####### Lease RENEWED at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
-		} else {
-			isFoundPreviously = true
-			fmt.Println(fmt.Sprintf("####### SHOULDN'T HAPPEN Lease found at %q iteration number: %d , AquireTime:%q, Renewtime: %q , LeaseDuration:%d  #######", now, count, currentLease.Spec.AcquireTime, currentLease.Spec.RenewTime, *currentLease.Spec.LeaseDurationSeconds))
-		}
-
-	}
-
 }

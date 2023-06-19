@@ -205,9 +205,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	nhcOrig := nhc.DeepCopy()
 	var finalRequeueAfter *time.Duration
 	defer func() {
-		if result.RequeueAfter > 0 {
-			finalRequeueAfter = utils.MinDuration(&result.RequeueAfter, finalRequeueAfter)
-		}
+		finalRequeueAfter = utils.MinRequeueDuration(&result.RequeueAfter, finalRequeueAfter)
 		if finalRequeueAfter != nil {
 			result.RequeueAfter = *finalRequeueAfter
 		}
@@ -225,7 +223,9 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}()
 
 	defer func() {
-		result.RequeueAfter, returnErr = leaseManager.UpdateReconcileResults(ctx, nhc, result.RequeueAfter, returnErr)
+		var leaseRequeue time.Duration
+		leaseRequeue, returnErr = leaseManager.UpdateReconcileResults(ctx, nhc, result.RequeueAfter, returnErr)
+		finalRequeueAfter = utils.MinRequeueDuration(&leaseRequeue, finalRequeueAfter)
 	}()
 
 	// set counters to zero for disabled NHC
@@ -293,7 +293,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// check nodes health
 	healthyNodes, unhealthyNodes, requeueAfter := r.checkNodesHealth(nodes, nhc)
-	finalRequeueAfter = utils.MinDuration(finalRequeueAfter, requeueAfter)
+	finalRequeueAfter = utils.MinRequeueDuration(finalRequeueAfter, requeueAfter)
 	nhc.Status.HealthyNodes = pointer.Int(len(healthyNodes))
 
 	// TODO consider setting Disabled condition?
@@ -363,7 +363,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			log.Error(err, "failed to start remediation")
 			return result, err
 		}
-		finalRequeueAfter = utils.MinDuration(finalRequeueAfter, requeueAfter)
+		finalRequeueAfter = utils.MinRequeueDuration(finalRequeueAfter, requeueAfter)
 
 		// check if we need to alert about a very old remediation CR
 		remediationCRs, err := resourceManager.ListRemediationCRs(nhc, func(cr unstructured.Unstructured) bool {
@@ -374,7 +374,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if isAlert {
 				metrics.ObserveNodeHealthCheckOldRemediationCR(node.Name, node.Namespace)
 			}
-			finalRequeueAfter = utils.MinDuration(finalRequeueAfter, requeueAfter)
+			finalRequeueAfter = utils.MinRequeueDuration(finalRequeueAfter, requeueAfter)
 		}
 	}
 
@@ -395,7 +395,7 @@ func (r *NodeHealthCheckReconciler) checkNodesHealth(nodes []v1.Node, nhc *remed
 	for _, node := range nodes {
 		if isHealthy, thisRequeueAfter := r.isHealthy(nhc.Spec.UnhealthyConditions, node.Status.Conditions); isHealthy {
 			healthy = append(healthy, node)
-			requeueAfter = utils.MinDuration(requeueAfter, thisRequeueAfter)
+			requeueAfter = utils.MinRequeueDuration(requeueAfter, thisRequeueAfter)
 		} else if r.MHCChecker.NeedIgnoreNode(&node) {
 			// consider terminating nodes being handled by MHC as healthy, from NHC point of view
 			healthy = append(healthy, node)
@@ -497,7 +497,7 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 			// come back when timeout expires
 			requeueIn = pointer.Duration(*timeout + 1*time.Second)
 		}
-		return minDuration(leaseRequeueTimeout, requeueIn), nil
+		return utils.MinRequeueDuration(leaseRequeueTimeout, requeueIn), nil
 	}
 	// CR already exists, check for timeout in case we need to
 	if timeout == nil {
@@ -536,7 +536,7 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 
 	if !timedOut && !failed {
 		// not timed out yet, come back when we do so
-		return minDuration(leaseRequeueTimeout, pointer.Duration(timeoutAt.Sub(now.Time))), nil
+		return utils.MinRequeueDuration(leaseRequeueTimeout, pointer.Duration(timeoutAt.Sub(now.Time))), nil
 	}
 
 	// handle timeout and failure
@@ -562,19 +562,6 @@ func (r *NodeHealthCheckReconciler) remediate(node *v1.Node, nhc *remediationv1a
 
 	// try next remediation asap
 	return pointer.Duration(1 * time.Second), nil
-}
-
-// TODO mshitrit replace with utils.MinDuration
-func minDuration(first *time.Duration, second *time.Duration) *time.Duration {
-	if first == nil {
-		return second
-	} else if second == nil {
-		return first
-	} else if *first < *second {
-		return first
-	} else {
-		return second
-	}
 }
 
 func (r *NodeHealthCheckReconciler) isControlPlaneRemediationAllowed(node *v1.Node, nhc *remediationv1alpha1.NodeHealthCheck, rm resources.Manager) (bool, error) {
