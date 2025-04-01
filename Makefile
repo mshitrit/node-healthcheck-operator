@@ -497,3 +497,6 @@ container-push:  ## Push containers (NOTE: catalog can't be build before bundle 
 
 .PHONY: build-and-run
 build-and-run: container-build-ocp container-push bundle-run
+
+.PHONY: full-gen
+full-gen:  tidy vendor generate manifests bundle fix-imports bundle-reset ## generates all automatically generated content
