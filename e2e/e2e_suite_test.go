@@ -83,13 +83,14 @@ var (
 	operatorNsName string
 
 	// The ns test pods are started in
-	testNsName = "nhc-test"
+	testNsName = "openshift-workload-availability"
 
 	// The ns where leases will be created
 	leaseNs = "medik8s-leases"
 )
 
 var _ = BeforeSuite(func() {
+	_ = os.Setenv("KUBECONFIG", "/home/mshitrit/clusters-config/dsl/bm/kubeconfig")
 	opts := zap.Options{
 		Development: true,
 		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
@@ -100,7 +101,7 @@ var _ = BeforeSuite(func() {
 	operatorNsName = os.Getenv("OPERATOR_NS")
 	Expect(operatorNsName).ToNot(BeEmpty(), "OPERATOR_NS env var not set, can't start e2e test")
 
-	snrTemplateName = os.Getenv("SNRT_NAME")
+	snrTemplateName = "self-node-remediation-automatic-strategy-template"
 	Expect(snrTemplateName).ToNot(BeEmpty(), "SNRT_NAME env var not set, can't start e2e test")
 
 	// +kubebuilder:scaffold:scheme
