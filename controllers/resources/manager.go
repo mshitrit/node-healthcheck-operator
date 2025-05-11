@@ -29,8 +29,8 @@ import (
 
 const (
 	HealthyDelayContextKey = "healthyDelay"
-	// remediationHealthyDelayAnnotationKey annotation storing the time in minutes to postponed node regaining health
-	remediationHealthyDelayAnnotationKey = "remediation.medik8s.io/healthy-delay"
+	// RemediationHealthyDelayAnnotationKey annotation storing the time in minutes to postponed node regaining health
+	RemediationHealthyDelayAnnotationKey = "remediation.medik8s.io/healthy-delay"
 )
 
 type Manager interface {
@@ -359,7 +359,6 @@ func (m *manager) shouldDelayCrDeletion(cr unstructured.Unstructured) (bool, err
 		return false, nil
 	}
 
-	layout := "2006-01-02 15:04:05"
 	switch {
 	case healthyDelayInSeconds == 0: //Delete the CR
 		return false, nil
@@ -370,8 +369,8 @@ func (m *manager) shouldDelayCrDeletion(cr unstructured.Unstructured) (bool, err
 		if cr.GetAnnotations() == nil {
 			cr.SetAnnotations(make(map[string]string))
 		}
-		if delayStartTimeStr, isDelayAnnotationExist := cr.GetAnnotations()[remediationHealthyDelayAnnotationKey]; isDelayAnnotationExist {
-			if delayStartTime, err := time.Parse(layout, delayStartTimeStr); err != nil {
+		if delayStartTimeStr, isDelayAnnotationExist := cr.GetAnnotations()[RemediationHealthyDelayAnnotationKey]; isDelayAnnotationExist {
+			if delayStartTime, err := time.Parse(time.RFC3339, delayStartTimeStr); err != nil {
 				return false, err
 			} else {
 				now := time.Now().UTC()
@@ -387,7 +386,7 @@ func (m *manager) shouldDelayCrDeletion(cr unstructured.Unstructured) (bool, err
 		} else {
 			// Set current time as the baseline for delaying node healthy
 			crAnnotations := cr.GetAnnotations()
-			crAnnotations[remediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(layout)
+			crAnnotations[RemediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
 			cr.SetAnnotations(crAnnotations)
 			m.log.Info("setting a delay for node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "delay in seconds", healthyDelayInSeconds)
 			return true, m.UpdateRemediationCR(&cr)

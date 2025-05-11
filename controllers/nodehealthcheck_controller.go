@@ -287,6 +287,12 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			continue
 		}
 
+		if reconcileDelay, err := r.calculateReconcileHealthDelay(remediationCRs, nhc.Spec.HealthyDelay); err != nil {
+			return result, err
+		} else if reconcileDelay > 0 {
+			updateRequeueAfter(&result, &reconcileDelay)
+		}
+
 		resources.UpdateStatusNodeDelayedHealthy(node.GetName(), nhc, remediationCRs)
 		// set conditions healthy timestamp
 		conditionsHealthyTimestamp := resources.UpdateStatusNodeConditionsHealthy(node.GetName(), nhc, currentTime())
@@ -881,4 +887,47 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	if result.RequeueAfter == 0 || *newRequeueAfter < result.RequeueAfter {
 		result.RequeueAfter = *newRequeueAfter
 	}
+}
+
+func (r *NodeHealthCheckReconciler) calculateReconcileHealthDelay(remediations []unstructured.Unstructured, configuredDelayInSeconds int) (time.Duration, error) {
+	if configuredDelayInSeconds <= 0 {
+		return 0, nil
+	}
+
+	var shortestRemainingDelay float64
+
+	for _, rem := range remediations {
+		annotations := rem.GetAnnotations()
+		if annotations == nil {
+			continue
+		}
+
+		timestampStr, exists := annotations[resources.RemediationHealthyDelayAnnotationKey]
+		if !exists {
+			continue
+		}
+
+		delayStartTime, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			r.Log.Error(err, fmt.Sprintf("failed parsing timestamp in annotation %s", resources.RemediationHealthyDelayAnnotationKey), "timestamp string", timestampStr)
+			return 0, err
+		}
+
+		targetTime := delayStartTime.Add(time.Duration(configuredDelayInSeconds) * time.Second)
+		remainingTime := targetTime.Sub(time.Now().UTC()).Seconds()
+
+		if remainingTime <= 0 {
+			continue
+		}
+
+		if shortestRemainingDelay == 0 || remainingTime < shortestRemainingDelay {
+			shortestRemainingDelay = remainingTime
+		}
+	}
+	//Offset by 1 second in order to make sure remedion can be deleted when requeue happens
+	if shortestRemainingDelay > 0 {
+		shortestRemainingDelay++
+	}
+
+	return time.Duration(shortestRemainingDelay) * time.Second, nil
 }

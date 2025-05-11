@@ -1224,7 +1224,7 @@ var _ = Describe("Node Health Check CR", func() {
 
 				mockNodeGettingHealthy(unhealthyNodeName)
 
-				// remediation shouldn't be removed even though rhe node is healthy because of delay
+				// remediation shouldn't be removed even though the node is healthy because of delay
 				Consistently(func(g Gomega) {
 					cr = findRemediationCRForNHC(unhealthyNodeName, underTest)
 					g.Expect(cr).ToNot(BeNil())
@@ -1242,7 +1242,7 @@ var _ = Describe("Node Health Check CR", func() {
 				Eventually(func(g Gomega) {
 					cr = findRemediationCRForNHC(unhealthyNodeName, underTest)
 					g.Expect(cr).To(BeNil())
-				}, time.Second*15, time.Millisecond*300).Should(Succeed())
+				}, time.Second*3, time.Millisecond*300).Should(Succeed())
 
 				// get updated NHC
 				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())

@@ -121,7 +121,7 @@ type NodeHealthCheckSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	PauseRequests []string `json:"pauseRequests,omitempty"`
 
-	// HealthyDelay stores the time in minutes before NHC would allow a node to be healthy again.
+	// HealthyDelay is the time in seconds before NHC would allow a node to be healthy again.
 	// A negative value means that NHC will never consider the node healthy and a manual intervention is expected
 	//
 	//+operator-sdk:csv:customresourcedefinitions:type=spec

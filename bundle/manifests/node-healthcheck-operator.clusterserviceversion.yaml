@@ -96,8 +96,8 @@ spec:
           are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"."
         displayName: Timeout
         path: escalatingRemediations[0].timeout
-      - description: HealthyDelay stores the time in minutes before NHC would allow
-          a node to be healthy again. A negative value means that NHC will never consider
+      - description: HealthyDelay is the time in seconds before NHC would allow a
+          node to be healthy again. A negative value means that NHC will never consider
           the node healthy and a manual intervention is expected
         displayName: Healthy Delay
         path: healthyDelay
