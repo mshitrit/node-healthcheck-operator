@@ -335,13 +335,13 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 	}
 	var shortestDelay time.Duration
 	for _, cr := range remediationCRs {
-		if delayInSeconds, err := m.calcCrDeletionDelay(cr); err != nil {
+		if crCalculatedDelay, err := m.calcCrDeletionDelay(cr); err != nil {
 			m.log.Error(err, "failed to check whether remediation deletion should be delayed, delay is canceled", "node", nodeName, "Cr name", cr.GetName())
-		} else if delayInSeconds < 0 { // remediation deletion is delayed permanently and expected to be handled manually
+		} else if crCalculatedDelay < 0 { // remediation deletion is delayed permanently and expected to be handled manually
 			continue
-		} else if delayInSeconds > 0 {
-			if shortestDelay == 0 || delayInSeconds < shortestDelay.Seconds() {
-				shortestDelay = time.Second * time.Duration(delayInSeconds)
+		} else if crCalculatedDelay > 0 {
+			if shortestDelay == 0 || crCalculatedDelay < shortestDelay {
+				shortestDelay = crCalculatedDelay
 				continue
 			}
 		}
@@ -354,10 +354,16 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		}
 	}
 
+	//Offset by 1 second in order to make sure remediation can be deleted when requeue happens
+	if shortestDelay > 0 {
+		shortestDelay = shortestDelay + time.Second
+		UpdateStatusNodeDelayedHealthy(nodeName, owner.(*remediationv1alpha1.NodeHealthCheck), remediationCRs)
+	}
+
 	return remediationCRs, shortestDelay, nil
 }
 
-func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (float64, error) {
+func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Duration, error) {
 	healthyDelayInSeconds, isDelayConfigured := m.ctx.Value(HealthyDelayContextKey).(int)
 	//Delay isn't configured stick with regular flow and delete the CR without delay
 	if !isDelayConfigured {
@@ -374,29 +380,30 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (float64, er
 		if cr.GetAnnotations() == nil {
 			cr.SetAnnotations(make(map[string]string))
 		}
-		if delayStartTimeStr, isDelayAnnotationExist := cr.GetAnnotations()[RemediationHealthyDelayAnnotationKey]; isDelayAnnotationExist {
-			if delayStartTime, err := time.Parse(time.RFC3339, delayStartTimeStr); err != nil {
+		delayStartTimeStr, isDelayAnnotationExist := cr.GetAnnotations()[RemediationHealthyDelayAnnotationKey]
+		if isDelayAnnotationExist {
+			delayStartTime, err := time.Parse(time.RFC3339, delayStartTimeStr)
+			if err != nil {
 				return 0, err
-			} else {
-				var remainingTimeSec float64
-				now := time.Now().UTC()
-				shouldDelayDelete := now.Before(delayStartTime.Add(time.Duration(healthyDelayInSeconds) * time.Second))
-				if shouldDelayDelete {
-					remainingTimeSec = delayStartTime.Add(time.Duration(healthyDelayInSeconds) * time.Second).Sub(now).Seconds()
-					m.log.Info("delaying node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "remaining time in seconds", remainingTimeSec)
-				} else {
-					m.log.Info("delaying for node getting healthy is done, about to remove the remediation CR", "node name", utils.GetNodeNameFromCR(cr))
-				}
-				return remainingTimeSec, nil
 			}
-		} else {
-			// Set current time as the baseline for delaying node healthy
-			crAnnotations := cr.GetAnnotations()
-			crAnnotations[RemediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
-			cr.SetAnnotations(crAnnotations)
-			m.log.Info("setting a delay for node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "delay in seconds", healthyDelayInSeconds)
-			return float64(healthyDelayInSeconds), m.UpdateRemediationCR(&cr)
+			var remainingTime time.Duration
+			now := time.Now().UTC()
+			delayUntil := delayStartTime.Add(time.Duration(healthyDelayInSeconds) * time.Second)
+			if now.Before(delayUntil) {
+				remainingTime = delayUntil.Sub(now)
+				m.log.Info("delaying node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "remaining time in seconds", remainingTime)
+			} else {
+				m.log.Info("delaying for node getting healthy is done, about to remove the remediation CR", "node name", utils.GetNodeNameFromCR(cr))
+			}
+			return remainingTime, nil
+
 		}
+		// Set current time as the baseline for delaying node healthy
+		crAnnotations := cr.GetAnnotations()
+		crAnnotations[RemediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
+		cr.SetAnnotations(crAnnotations)
+		m.log.Info("setting a delay for node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "delay in seconds", healthyDelayInSeconds)
+		return time.Duration(healthyDelayInSeconds) * time.Second, m.UpdateRemediationCR(&cr)
 	}
 }
 
