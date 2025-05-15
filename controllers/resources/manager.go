@@ -364,16 +364,15 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 }
 
 func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Duration, error) {
-	healthyDelayInSeconds, isDelayConfigured := m.ctx.Value(HealthyDelayContextKey).(int)
+	healthyDelay, isDelayConfigured := m.ctx.Value(HealthyDelayContextKey).(time.Duration)
 	//Delay isn't configured stick with regular flow and delete the CR without delay
 	if !isDelayConfigured {
 		return 0, nil
 	}
-
 	switch {
-	case healthyDelayInSeconds == 0: //Delete the CR
+	case healthyDelay == 0: //Delete the CR
 		return 0, nil
-	case healthyDelayInSeconds < 0:
+	case healthyDelay < 0:
 		//negative value is an indication to never automatically delete the CR
 		return -1, nil
 	default:
@@ -388,10 +387,10 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Durati
 			}
 			var remainingTime time.Duration
 			now := time.Now().UTC()
-			delayUntil := delayStartTime.Add(time.Duration(healthyDelayInSeconds) * time.Second)
+			delayUntil := delayStartTime.Add(healthyDelay)
 			if now.Before(delayUntil) {
 				remainingTime = delayUntil.Sub(now)
-				m.log.Info("delaying node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "remaining time in seconds", remainingTime)
+				m.log.Info("delaying node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "remaining time in seconds", remainingTime.Seconds())
 			} else {
 				m.log.Info("delaying for node getting healthy is done, about to remove the remediation CR", "node name", utils.GetNodeNameFromCR(cr))
 			}
@@ -402,8 +401,8 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Durati
 		crAnnotations := cr.GetAnnotations()
 		crAnnotations[RemediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
 		cr.SetAnnotations(crAnnotations)
-		m.log.Info("setting a delay for node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "delay in seconds", healthyDelayInSeconds)
-		return time.Duration(healthyDelayInSeconds) * time.Second, m.UpdateRemediationCR(&cr)
+		m.log.Info("setting a delay for node getting healthy", "node name", utils.GetNodeNameFromCR(cr), "delay in seconds", healthyDelay.Seconds())
+		return healthyDelay, m.UpdateRemediationCR(&cr)
 	}
 }
 
