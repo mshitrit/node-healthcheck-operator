@@ -1204,7 +1204,7 @@ var _ = Describe("Node Health Check CR", func() {
 		Context("with Node setup to delay healthy", func() {
 			BeforeEach(func() {
 				setupObjects(1, 2, false)
-				underTest.Spec.HealthyDelay = 3
+				underTest.Spec.HealthyDelay = metav1.Duration{Duration: time.Second * 3}
 			})
 			It("remediation shouldn't be created", func() {
 				// first call should fail, because the node gets unready in a few seconds only
