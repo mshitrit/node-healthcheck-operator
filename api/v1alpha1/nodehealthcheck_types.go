@@ -126,8 +126,9 @@ type NodeHealthCheckSpec struct {
 	//
 	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
 	//+kubebuilder:validation:Type=string
+	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	HealthyDelay metav1.Duration `json:"healthyDelay,omitempty"`
+	HealthyDelay *metav1.Duration `json:"healthyDelay,omitempty"`
 }
 
 // UnhealthyCondition represents a Node condition type and value with a
