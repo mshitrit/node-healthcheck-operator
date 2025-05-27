@@ -48,7 +48,7 @@ type Manager interface {
 	ListRemediationCRs(remediationTemplates []*corev1.ObjectReference, remediationCRFilter func(r unstructured.Unstructured) bool) ([]unstructured.Unstructured, error)
 	GetNodes(labelSelector metav1.LabelSelector) ([]corev1.Node, error)
 	GetMHCTargets(mhc *machinev1beta1.MachineHealthCheck) ([]Target, error)
-	HandleHealthyNode(nodeName string, crName string, owner client.Object) ([]unstructured.Unstructured, time.Duration, error)
+	HandleHealthyNode(nodeName string, crName string, owner client.Object) ([]unstructured.Unstructured, *time.Duration, error)
 	CleanUp(nodeName string) error
 }
 
@@ -316,22 +316,22 @@ func IsOwner(remediationCR *unstructured.Unstructured, owner client.Object) bool
 	return false
 }
 
-func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client.Object) ([]unstructured.Unstructured, time.Duration, error) {
+func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client.Object) ([]unstructured.Unstructured, *time.Duration, error) {
 	remediationCRs, err := m.ListRemediationCRs(utils.GetAllRemediationTemplates(owner), func(cr unstructured.Unstructured) bool {
 		return (cr.GetName() == crName || utils.GetNodeNameFromCR(cr) == nodeName) && IsOwner(&cr, owner)
 	})
 	if err != nil {
 		m.log.Error(err, "failed to get remediation CRs for healthy node", "node", nodeName)
-		return remediationCRs, 0, err
+		return remediationCRs, nil, err
 	}
 
 	if len(remediationCRs) == 0 {
 		// when all CRs are gone, the node is considered healthy
 		if err = m.CleanUp(nodeName); err != nil {
 			m.log.Error(err, "failed to handle healthy node", "node", nodeName)
-			return remediationCRs, 0, err
+			return remediationCRs, nil, err
 		}
-		return remediationCRs, 0, nil
+		return remediationCRs, nil, nil
 	}
 	var shortestDelay time.Duration
 	for _, cr := range remediationCRs {
@@ -348,7 +348,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 
 		if deleted, err := m.DeleteRemediationCR(&cr, owner); err != nil {
 			m.log.Error(err, "failed to delete remediation CR", "name", cr.GetName())
-			return remediationCRs, 0, err
+			return remediationCRs, nil, err
 		} else if deleted {
 			m.log.Info("deleted remediation CR", "name", cr.GetName())
 		}
@@ -360,7 +360,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		UpdateStatusNodeDelayedHealthy(nodeName, owner.(*remediationv1alpha1.NodeHealthCheck), remediationCRs)
 	}
 
-	return remediationCRs, shortestDelay, nil
+	return remediationCRs, &shortestDelay, nil
 }
 
 func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Duration, error) {
