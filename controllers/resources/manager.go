@@ -354,7 +354,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		}
 	}
 
-	//Offset by 1 second in order to make sure remediation can be deleted when requeue happens
+	// Offset by 1 second in order to make sure remediation can be deleted when requeue happens.
 	if requeueAfter > 0 {
 		requeueAfter = requeueAfter + time.Second
 		UpdateStatusNodeDelayedHealthy(nodeName, owner.(*remediationv1alpha1.NodeHealthCheck), remediationCRs)
@@ -365,7 +365,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 
 func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Duration, error) {
 	healthyDelay, isDelayConfigured := m.ctx.Value(HealthyDelayContextKey).(time.Duration)
-	//Delay isn't configured stick with regular flow and delete the CR without delay
+	// Delay isn't configured stick with regular flow and delete the CR without delay.
 	if !isDelayConfigured {
 		return 0, nil
 	}
@@ -373,7 +373,7 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Durati
 	case healthyDelay == 0: //Delete the CR
 		return 0, nil
 	case healthyDelay < 0:
-		//negative value is an indication to never automatically delete the CR
+		// Negative value is an indication to never automatically delete the CR.
 		return -1, nil
 	default:
 		if cr.GetAnnotations() == nil {
@@ -397,7 +397,7 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Durati
 			return remainingTime, nil
 
 		}
-		// Set current time as the baseline for delaying node healthy
+		// Set current time as the baseline for delaying node healthy.
 		crAnnotations := cr.GetAnnotations()
 		crAnnotations[RemediationHealthyDelayAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
 		cr.SetAnnotations(crAnnotations)
@@ -415,7 +415,7 @@ func (m *manager) getOwningMachineWithNamespace(node *corev1.Node) (*metav1.Owne
 	if err != nil {
 		if errors.Is(err, utils.MachineAnnotationNotFoundError) {
 			m.log.Info("didn't find machine annotation for Openshift machine", "node", node.GetName())
-			// nothing we can do, continue without owning machine
+			// Nothing we can do, continue without owning machine.
 			return nil, "", nil
 		}
 		return nil, "", err
