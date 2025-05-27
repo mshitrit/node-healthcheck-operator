@@ -336,7 +336,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 	var requeueAfter time.Duration
 	for _, cr := range remediationCRs {
 		if crCalculatedDelay, err := m.calcCrDeletionDelay(cr); err != nil {
-			m.log.Error(err, "failed to check whether remediation deletion should be delayed, delay is canceled", "node", nodeName, "Cr name", cr.GetName())
+			m.log.Error(err, "failed to check whether remediation deletion should be delayed, remediation isn't delayed", "node", nodeName, "CR name", cr.GetName())
 		} else if crCalculatedDelay < 0 { // remediation deletion is delayed permanently and expected to be handled manually
 			continue
 		} else if crCalculatedDelay > 0 {
