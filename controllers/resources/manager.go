@@ -353,12 +353,12 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 			m.log.Info("deleted remediation CR", "name", cr.GetName())
 		}
 	}
-
+	nhc, isNhcOwner := owner.(*remediationv1alpha1.NodeHealthCheck)
 	// Offset by 1 second in order to make sure remediation can be deleted when requeue happens.
-	if requeueAfter != nil {
+	if requeueAfter != nil && isNhcOwner {
 		requeueWithBuffer := *requeueAfter + time.Second
 		requeueAfter = &requeueWithBuffer
-		UpdateStatusNodeDelayedHealthy(nodeName, owner.(*remediationv1alpha1.NodeHealthCheck), remediationCRs)
+		UpdateStatusNodeDelayedHealthy(nodeName, nhc, remediationCRs)
 	}
 
 	return remediationCRs, requeueAfter, nil
