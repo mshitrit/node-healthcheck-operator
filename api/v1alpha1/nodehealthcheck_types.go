@@ -124,7 +124,7 @@ type NodeHealthCheckSpec struct {
 	// HealthyDelay is the time before NHC would allow a node to be healthy again.
 	// A negative value means that NHC will never consider the node healthy and a manual intervention is expected
 	//
-	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Pattern="^-?([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
 	//+kubebuilder:validation:Type=string
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
