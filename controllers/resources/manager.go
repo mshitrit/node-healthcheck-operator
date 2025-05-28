@@ -333,15 +333,15 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		}
 		return remediationCRs, nil, nil
 	}
-	var requeueAfter time.Duration
+	var requeueAfter *time.Duration
 	for _, cr := range remediationCRs {
 		if crCalculatedDelay, err := m.calcCrDeletionDelay(cr); err != nil {
 			m.log.Error(err, "failed to check whether remediation deletion should be delayed, remediation isn't delayed", "node", nodeName, "CR name", cr.GetName())
 		} else if crCalculatedDelay < 0 { // remediation deletion is delayed permanently and expected to be handled manually
 			continue
 		} else if crCalculatedDelay > 0 {
-			if requeueAfter == 0 || crCalculatedDelay < requeueAfter {
-				requeueAfter = crCalculatedDelay
+			if requeueAfter == nil || crCalculatedDelay < *requeueAfter {
+				requeueAfter = &crCalculatedDelay
 				continue
 			}
 		}
@@ -355,12 +355,13 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 	}
 
 	// Offset by 1 second in order to make sure remediation can be deleted when requeue happens.
-	if requeueAfter > 0 {
-		requeueAfter = requeueAfter + time.Second
+	if requeueAfter != nil {
+		requeueWithBuffer := *requeueAfter + time.Second
+		requeueAfter = &requeueWithBuffer
 		UpdateStatusNodeDelayedHealthy(nodeName, owner.(*remediationv1alpha1.NodeHealthCheck), remediationCRs)
 	}
 
-	return remediationCRs, &requeueAfter, nil
+	return remediationCRs, requeueAfter, nil
 }
 
 func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Duration, error) {
