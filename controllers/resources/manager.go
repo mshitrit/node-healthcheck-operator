@@ -370,10 +370,9 @@ func (m *manager) calcCrDeletionDelay(cr unstructured.Unstructured) (time.Durati
 		return 0, nil
 	}
 	switch {
-	case healthyDelay == 0: //Delete the CR
+	case healthyDelay == 0: // Delete the CR
 		return 0, nil
-	case healthyDelay < 0:
-		// Negative value is an indication to never automatically delete the CR.
+	case healthyDelay < 0: // Negative value is an indication to never automatically delete the CR.
 		return -1, nil
 	default:
 		if cr.GetAnnotations() == nil {
