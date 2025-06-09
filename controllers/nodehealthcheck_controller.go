@@ -281,9 +281,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			log.Error(err, "failed to handle healthy node", "node", node.Name)
 			return result, err
 		}
-		if requeueAfter != nil {
-			updateRequeueAfter(&result, requeueAfter)
-		}
+		updateRequeueAfter(&result, requeueAfter)
 
 		// only consider nodes without remediation CRs as healthy
 		if len(remediationCRs) == 0 {
