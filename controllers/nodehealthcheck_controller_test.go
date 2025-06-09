@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -1220,7 +1221,7 @@ var _ = Describe("Node Health Check CR", func() {
 				// get updated NHC
 				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 				//Check Delay status isn't applied until the node is healthy
-				Expect(underTest.Status.UnhealthyNodes[0].HealthyDelayed).To(BeFalse())
+				Expect(underTest.Status.UnhealthyNodes[0].HealthyDelayed).To(BeNil())
 
 				mockNodeGettingHealthy(unhealthyNodeName)
 
@@ -1236,7 +1237,7 @@ var _ = Describe("Node Health Check CR", func() {
 				// get updated NHC
 				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 				//Check status was updated
-				Expect(underTest.Status.UnhealthyNodes[0].HealthyDelayed).To(BeTrue())
+				Expect(underTest.Status.UnhealthyNodes[0].HealthyDelayed).To(Equal(ptr.To(true)))
 
 				//Delay is done remediation should be removed
 				Eventually(func(g Gomega) {

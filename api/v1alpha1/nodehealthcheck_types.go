@@ -283,7 +283,7 @@ type UnhealthyNode struct {
 	//
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=status
-	HealthyDelayed bool `json:"healthyDelayed,omitempty"`
+	HealthyDelayed *bool `json:"healthyDelayed,omitempty"`
 }
 
 // Remediation defines a remediation which was created for a node
