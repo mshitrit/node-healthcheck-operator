@@ -73,8 +73,12 @@ func UpdateStatusNodeHealthy(nodeName string, nhc *remediationv1alpha1.NodeHealt
 }
 
 func UpdateStatusNodeDelayedHealthy(nodeName string, nhc *remediationv1alpha1.NodeHealthCheck, remediationCRs []unstructured.Unstructured) {
+	if !isNodeHealthyDelayed(nodeName, remediationCRs) {
+		return
+	}
+
 	for i := range nhc.Status.UnhealthyNodes {
-		if nhc.Status.UnhealthyNodes[i].Name == nodeName && isNodeHealthyDelayed(nodeName, remediationCRs) {
+		if nhc.Status.UnhealthyNodes[i].Name == nodeName {
 			nhc.Status.UnhealthyNodes[i].HealthyDelayed = ptr.To(true)
 			break
 		}
