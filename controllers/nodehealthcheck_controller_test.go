@@ -1207,7 +1207,7 @@ var _ = Describe("Node Health Check CR", func() {
 				setupObjects(1, 2, false)
 				underTest.Spec.HealthyDelay = &metav1.Duration{Duration: time.Second * 3}
 			})
-			It("remediation shouldn't be created", func() {
+			It("remediation deletion should be delayed", func() {
 				// first call should fail, because the node gets unready in a few seconds only
 				cr := findRemediationCRForNHC(unhealthyNodeName, underTest)
 				Expect(cr).To(BeNil())
