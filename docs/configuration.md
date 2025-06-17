@@ -198,8 +198,9 @@ Meaning and Motivation:
 
 Historically, NHC would remove a remediation (and potentially allow taints to be removed) as soon as a node reported healthy. However, some customers require more precise control over this process, especially when dealing with nodes that might:
 
-"Flap" health status: Briefly regain health for a very short period only to become unhealthy again.
-Require post-remediation validation: Need a grace period to ensure stability or run specific checks before being fully integrated back into the cluster and having taints removed.
+- "Flap" health status: Briefly regain health for a very short period only to become unhealthy again.
+- Require post-remediation validation: Need a grace period to ensure stability or run specific checks before being fully integrated back into the cluster and having taints removed.
+
 By configuring a healthyDelay, you can ensure that a node remains under observation for a specified duration after it first reports healthy. NHC will only delete its associated remediation (which in turn can trigger taint removal) once the node has maintained a healthy status for the entire configured delay.
 
 Manual Intervention:
