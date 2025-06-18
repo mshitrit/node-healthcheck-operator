@@ -1250,8 +1250,12 @@ var _ = Describe("Node Health Check CR", func() {
 
 					// Get updated NHC
 					Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+
 					// Check unhealthy was removed
-					Expect(len(underTest.Status.UnhealthyNodes)).To(BeZero())
+					Eventually(func(g Gomega) {
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(BeZero())
+					}, time.Second*3, time.Millisecond*300).Should(Succeed())
+
 				})
 			})
 			When("Delay is set indefinitely", func() {
@@ -1299,7 +1303,9 @@ var _ = Describe("Node Health Check CR", func() {
 					Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 
 					// Check unhealthy was removed
-					Expect(len(underTest.Status.UnhealthyNodes)).To(BeZero())
+					Eventually(func(g Gomega) {
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(BeZero())
+					}, time.Second*3, time.Millisecond*300).Should(Succeed())
 
 					// Check node annotation was removed
 					remediatedNode := &v1.Node{}
