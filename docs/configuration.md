@@ -207,10 +207,22 @@ Manual Intervention:
 
 A negative value for healthyDelay has a special meaning: it tells NHC to never automatically consider the node healthy and to never automatically delete the remediation. This requires manual intervention to clear the remediation and allow the node to fully rejoin the cluster.
 
-Manual intervention involves:
+There are two methods for manual intervention:
 
-- Removing the healthyDelay value from the NodeHealthCheck CR: Set the healthyDelay field to 0s (zero duration) or simply remove the field entirely from the CR.
-- Impact: This action will affect all nodes currently being delayed by that specific NodeHealthCheck CR, allowing them to be considered healthy (if they meet other healthy conditions) and have their remediations removed.
+- Method 1: Modifying the NodeHealthCheck CR (Affects all delayed nodes under this CR)
+
+  - Action: Set the healthyDelay field to 0s (zero duration) or simply remove the field entirely from the NodeHealthCheck CR.
+  - Impact: This action will affect all nodes currently being delayed by that specific NodeHealthCheck CR, allowing them to be considered healthy (if they meet other healthy conditions) and have their remediations removed without further delay. This is useful if you want to disable the delay for the entire set of nodes managed by this CR.
+
+- Method 2: Using a Node Annotation (Node-specific intervention)
+
+  - To trigger node-specific manual intervention, you should add the remediation.medik8s.io/manually-confirmed-healthy annotation (with any value) to the Node object of the node that you want to manually confirm as healthy.
+  - When this annotation is present on a Node:
+    - NHC will ignore the configured healthyDelay for that specific node.
+    - NHC will update its internal status to reflect that the node is no longer being delayed by healthyDelay.
+    - Once the node meets all other healthy criteria, NHC will delete the remediation.medik8s.io/manually-confirmed-healthy annotation from the Node, and proceed with deleting the remediation CR for that node.
+    - This approach provides a precise, node-specific mechanism for an administrator to signal that a node is healthy and ready to exit the healthyDelay period, without affecting the healthyDelay configuration for other nodes under the same NodeHealthCheck CR.
+
 
 ## NodeHealthCheck Status
 
