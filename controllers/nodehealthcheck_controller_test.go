@@ -1262,7 +1262,7 @@ var _ = Describe("Node Health Check CR", func() {
 				BeforeEach(func() {
 					underTest.Spec.HealthyDelay = &metav1.Duration{Duration: time.Second * -1}
 				})
-				It("remediation shouldn't be deleted", func() {
+				It("remediation should only be deleted after node is manually confirmed to be healthy", func() {
 					// First call should fail, because the node gets unready in a few seconds only
 					cr := findRemediationCRForNHC(unhealthyNodeName, underTest)
 					Expect(cr).To(BeNil())
