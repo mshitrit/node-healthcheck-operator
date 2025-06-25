@@ -1297,7 +1297,7 @@ var _ = Describe("Node Health Check CR", func() {
 					Eventually(func(g Gomega) {
 						cr = findRemediationCRForNHC(unhealthyNodeName, underTest)
 						g.Expect(cr).To(BeNil())
-					}, time.Second*8, time.Millisecond*300).Should(Succeed())
+					}, time.Second*3, time.Millisecond*300).Should(Succeed())
 
 					// Get updated NHC
 					Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
