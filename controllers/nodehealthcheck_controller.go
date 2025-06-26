@@ -497,7 +497,7 @@ func (r *NodeHealthCheckReconciler) deleteOrphanedRemediationCRs(nhc *remediatio
 	for _, cr := range orphanedRemediationCRs {
 		nodeName := utils.GetNodeNameFromCR(cr)
 		// do some housekeeping first. When the CRs are deleted, we never get back here...
-		if err := rm.CleanUp(nodeName); err != nil {
+		if err := rm.CleanUp(nodeName, false); err != nil {
 			log.Error(err, "failed to clean up orphaned node", "node", nodeName)
 			return err
 		}

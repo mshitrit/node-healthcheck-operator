@@ -51,7 +51,7 @@ type Manager interface {
 	GetNodes(labelSelector metav1.LabelSelector) ([]corev1.Node, error)
 	GetMHCTargets(mhc *machinev1beta1.MachineHealthCheck) ([]Target, error)
 	HandleHealthyNode(nodeName string, crName string, owner client.Object) ([]unstructured.Unstructured, *time.Duration, error)
-	CleanUp(nodeName string) error
+	CleanUp(nodeName string, isManuallyConfirmedHealthy bool) error
 }
 
 type RemediationCRNotOwned struct{ msg string }
@@ -327,21 +327,27 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		return remediationCRs, nil, err
 	}
 
-	if len(remediationCRs) == 0 {
-		// when all CRs are gone, the node is considered healthy
-		if err = m.CleanUp(nodeName); err != nil {
-			m.log.Error(err, "failed to handle healthy node", "node", nodeName)
-			return remediationCRs, nil, err
-		}
-		return remediationCRs, nil, nil
-	}
-	var requeueAfter *time.Duration
-
 	isManuallyConfirmedHealthy, err := m.isManuallyConfirmedHealthyAnnotationSet(nodeName)
 	if err != nil {
 		m.log.Error(err, fmt.Sprintf("failed to check whether node was set with %s annotation", RemediationManuallyConfirmedHealthyAnnotationKey), "node", nodeName)
 		return remediationCRs, nil, err
 	}
+	nhc, isNhcOwner := owner.(*remediationv1alpha1.NodeHealthCheck)
+	if len(remediationCRs) == 0 {
+		// when all CRs are gone, the node is considered healthy
+		if err = m.CleanUp(nodeName, isManuallyConfirmedHealthy); err != nil {
+			m.log.Error(err, "failed to handle healthy node", "node", nodeName)
+			return remediationCRs, nil, err
+		}
+		// need to update status after node regained health
+		if isManuallyConfirmedHealthy {
+			// schedule another remediation to update the status
+			return remediationCRs, pointer.Duration(time.Second), nil
+		}
+
+		return remediationCRs, nil, nil
+	}
+	var requeueAfter *time.Duration
 
 	for _, cr := range remediationCRs {
 		shouldDelete := true
@@ -370,15 +376,7 @@ func (m *manager) HandleHealthyNode(nodeName string, crName string, owner client
 		}
 
 	}
-	if isManuallyConfirmedHealthy {
-		// Remove the annotation once all the CRs were removed
-		if err := m.removeConfirmedHealthyAnnotation(nodeName); err != nil {
-			m.log.Error(err, fmt.Sprintf("failed to remove node annotation %s", RemediationManuallyConfirmedHealthyAnnotationKey), "node", nodeName)
-			return remediationCRs, nil, err
-		}
-	}
 
-	nhc, isNhcOwner := owner.(*remediationv1alpha1.NodeHealthCheck)
 	// Offset by 1 second in order to make sure remediation can be deleted when requeue happens.
 	if requeueAfter != nil && isNhcOwner {
 		*requeueAfter += time.Second
@@ -459,7 +457,14 @@ func (m *manager) removeConfirmedHealthyAnnotation(nodeName string) error {
 
 }
 
-func (m *manager) CleanUp(nodeName string) error {
+func (m *manager) CleanUp(nodeName string, isManuallyConfirmedHealthy bool) error {
+	if isManuallyConfirmedHealthy {
+		// Remove the annotation once all the CRs were removed
+		if err := m.removeConfirmedHealthyAnnotation(nodeName); err != nil {
+			m.log.Error(err, fmt.Sprintf("failed to remove node annotation %s", RemediationManuallyConfirmedHealthyAnnotationKey), "node", nodeName)
+			return err
+		}
+	}
 	return m.leaseManager.InvalidateLease(m.ctx, nodeName)
 }
 
