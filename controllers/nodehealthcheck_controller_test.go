@@ -1314,7 +1314,6 @@ var _ = Describe("Node Health Check CR", func() {
 					Expect(found).To(BeFalse())
 				})
 			})
-
 		})
 
 		Context("with progressing condition being set", func() {
