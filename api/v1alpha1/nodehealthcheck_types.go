@@ -280,6 +280,24 @@ type NodeHealthCheckStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status,xDescriptors="urn:alm:descriptor:io.kubernetes.phase:reason"
 	Reason string `json:"reason,omitempty"`
 
+	// StormRecoveryActive indicates if storm recovery mode is currently active.
+	// Storm recovery mode is activated when the number of healthy nodes drops below minHealthy,
+	// and remediation is delayed until the number of unhealthy nodes reaches stormRecoveryThreshold.
+	//
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	StormRecoveryActive *bool `json:"stormRecoveryActive,omitempty"`
+
+	// StormRecoveryStartTime records when storm recovery mode was activated.
+	// This field is set when StormRecoveryActive becomes true and helps track
+	// how long the system has been in storm recovery mode.
+	//
+	//+optional
+	//+kubebuilder:validation:Type=string
+	//+kubebuilder:validation:Format=date-time
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	StormRecoveryStartTime *metav1.Time `json:"stormRecoveryStartTime,omitempty"`
+
 	// LastUpdateTime is the last time the status was updated.
 	//
 	//+optional
