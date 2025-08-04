@@ -333,76 +333,9 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// check if we have enough healthy nodes and manage storm recovery
-	skipRemediation := false
-	unhealthyCount := len(matchingNodes)
-	totalNodes := len(selectedNodes)
-
-	// Check if we should start storm recovery
-	shouldStart, err := shouldStartStormRecovery(nhc, totalNodes)
+	skipRemediation, err := r.evaluateRemediationPolicy(nhc, matchingNodes, selectedNodes, *nhc.Status.HealthyNodes, log)
 	if err != nil {
-		log.Error(err, "failed to evaluate storm recovery start condition",
-			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
-			"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
 		return result, err
-	}
-
-	// Check if we should exit storm recovery
-	shouldExit, err := shouldExitStormRecovery(nhc, unhealthyCount, totalNodes)
-	if err != nil {
-		log.Error(err, "failed to evaluate storm recovery exit condition",
-			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
-			"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
-		return result, err
-	}
-
-	// Update storm recovery status
-	if shouldStart {
-		r.updateStormRecoveryStatus(nhc, true)
-	} else if shouldExit {
-		r.updateStormRecoveryStatus(nhc, false)
-	}
-
-	// Determine if we should skip remediation
-	if isStormRecoveryActive(nhc) && !shouldExit {
-		// In storm recovery mode but haven't reached threshold yet - skip remediation
-		stormThreshold, err := getStormRecoveryThreshold(nhc, totalNodes)
-		if err != nil {
-			log.Error(err, "failed to calculate storm recovery threshold",
-				"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
-			return result, err
-		}
-		msg := fmt.Sprintf("Storm recovery active: waiting for unhealthy nodes (%d) to drop to threshold (%d) before proceeding with remediation",
-			unhealthyCount, stormThreshold)
-		log.Info(msg)
-		commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
-		skipRemediation = true
-	} else if !isStormRecoveryActive(nhc) && nhc.Spec.StormRecoveryThreshold == nil && nhc.Spec.MinHealthy != nil {
-		// Legacy behavior when storm recovery is not configured but minHealthy is set
-		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, totalNodes, true)
-		if err != nil {
-			log.Error(err, "failed to calculate min healthy allowed nodes",
-				"minHealthy", nhc.Spec.MinHealthy, "observedNodes", nhc.Status.ObservedNodes)
-			return result, err
-		} else if healthyCount < minHealthy {
-			msg := fmt.Sprintf("Skipped remediation because the number of healthy nodes selected by the selector is %d and should equal or exceed %d",
-				healthyCount, minHealthy)
-			log.Info(msg)
-			commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
-			skipRemediation = true
-		}
-	} else if !isStormRecoveryActive(nhc) && nhc.Spec.StormRecoveryThreshold == nil && nhc.Spec.MaxUnhealthy != nil {
-		// Legacy behavior when storm recovery is not configured but maxUnhealthy is set
-		if minHealthy, err := getMinHealthy(nhc, totalNodes); err != nil {
-			log.Error(err, "failed to calculate min healthy allowed nodes",
-				"maxUnhealthy", nhc.Spec.MaxUnhealthy, "observedNodes", nhc.Status.ObservedNodes)
-			return result, err
-		} else if healthyCount < minHealthy {
-			msg := fmt.Sprintf("Skipped remediation because the number of healthy nodes selected by the selector is %d and should equal or exceed %d",
-				healthyCount, minHealthy)
-			log.Info(msg)
-			commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
-			skipRemediation = true
-		}
 	}
 
 	// remediate unhealthy nodes
@@ -989,6 +922,82 @@ func shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, unhealthy
 		return false, err
 	}
 	return unhealthyCount <= stormThreshold, nil
+}
+
+func (r *NodeHealthCheckReconciler) evaluateRemediationPolicy(nhc *remediationv1alpha1.NodeHealthCheck, matchingNodes []v1.Node, selectedNodes []v1.Node, healthyCount int, log logr.Logger) (bool, error) {
+	unhealthyCount := len(matchingNodes)
+	totalNodes := len(selectedNodes)
+
+	// Check if we should start storm recovery
+	shouldStart, err := shouldStartStormRecovery(nhc, totalNodes)
+	if err != nil {
+		log.Error(err, "failed to evaluate storm recovery start condition",
+			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
+			"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
+		return false, err
+	}
+
+	// Check if we should exit storm recovery
+	shouldExit, err := shouldExitStormRecovery(nhc, unhealthyCount, totalNodes)
+	if err != nil {
+		log.Error(err, "failed to evaluate storm recovery exit condition",
+			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
+			"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
+		return false, err
+	}
+
+	// Update storm recovery status
+	if shouldStart {
+		r.updateStormRecoveryStatus(nhc, true)
+	} else if shouldExit {
+		r.updateStormRecoveryStatus(nhc, false)
+	}
+
+	// Determine if we should skip remediation
+	if isStormRecoveryActive(nhc) && !shouldExit {
+		// In storm recovery mode but haven't reached threshold yet - skip remediation
+		stormThreshold, err := getStormRecoveryThreshold(nhc, totalNodes)
+		if err != nil {
+			log.Error(err, "failed to calculate storm recovery threshold",
+				"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
+			return false, err
+		}
+		msg := fmt.Sprintf("Storm recovery active: waiting for unhealthy nodes (%d) to drop to threshold (%d) before proceeding with remediation",
+			unhealthyCount, stormThreshold)
+		log.Info(msg)
+		commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
+		return true, nil
+	} else if !isStormRecoveryActive(nhc) && nhc.Spec.StormRecoveryThreshold == nil && nhc.Spec.MinHealthy != nil {
+		// Legacy behavior when storm recovery is not configured but minHealthy is set
+		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, totalNodes, true)
+		if err != nil {
+			log.Error(err, "failed to calculate min healthy allowed nodes",
+				"minHealthy", nhc.Spec.MinHealthy, "observedNodes", nhc.Status.ObservedNodes)
+			return false, err
+		} else if healthyCount < minHealthy {
+			msg := fmt.Sprintf("Skipped remediation because the number of healthy nodes selected by the selector is %d and should equal or exceed %d",
+				healthyCount, minHealthy)
+			log.Info(msg)
+			commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
+			return true, nil
+		}
+	} else if !isStormRecoveryActive(nhc) && nhc.Spec.StormRecoveryThreshold == nil && nhc.Spec.MaxUnhealthy != nil {
+		// Legacy behavior when storm recovery is not configured but maxUnhealthy is set
+		if minHealthy, err := getMinHealthy(nhc, totalNodes); err != nil {
+			log.Error(err, "failed to calculate min healthy allowed nodes",
+				"maxUnhealthy", nhc.Spec.MaxUnhealthy, "observedNodes", nhc.Status.ObservedNodes)
+			return false, err
+		} else if healthyCount < minHealthy {
+			msg := fmt.Sprintf("Skipped remediation because the number of healthy nodes selected by the selector is %d and should equal or exceed %d",
+				healthyCount, minHealthy)
+			log.Info(msg)
+			commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
+			return true, nil
+		}
+	}
+
+	// Remediation is allowed
+	return false, nil
 }
 
 func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1alpha1.NodeHealthCheck, activate bool) {
