@@ -107,6 +107,20 @@ type NodeHealthCheckSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	MaxUnhealthy *intstr.IntOrString `json:"maxUnhealthy,omitempty"`
 
+	// StormRecoveryThreshold defines the threshold for proceeding with remediation during storm scenarios.
+	// Once the number of healthy nodes drops below minHealthy, fencing should be delayed until the number
+	// of unhealthy nodes reaches this stormRecoveryThreshold. This prevents premature fencing during
+	// transient issues and potential "storm" scenarios.
+	// Expects either a non-negative integer value or a percentage value.
+	// Percentage values must be positive whole numbers and are capped at 100%.
+	// This parameter is optional and when not specified, the original minHealthy behavior is preserved.
+	//
+	//+optional
+	//+kubebuilder:validation:XIntOrString
+	//+kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	StormRecoveryThreshold *intstr.IntOrString `json:"stormRecoveryThreshold,omitempty"`
+
 	// RemediationTemplate is a reference to a remediation template
 	// provided by an infrastructure provider.
 	//

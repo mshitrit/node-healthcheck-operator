@@ -97,6 +97,16 @@ spec:
           to work with an empty selector, which matches all nodes."
         displayName: Selector
         path: selector
+      - description: StormRecoveryThreshold defines the threshold for proceeding with
+          remediation during storm scenarios. Once the number of healthy nodes drops
+          below minHealthy, fencing should be delayed until the number of unhealthy
+          nodes reaches this stormRecoveryThreshold. This prevents premature fencing
+          during transient issues and potential "storm" scenarios. Expects either
+          a non-negative integer value or a percentage value. Percentage values must
+          be positive whole numbers and are capped at 100%. This parameter is optional
+          and when not specified, the original minHealthy behavior is preserved.
+        displayName: Storm Recovery Threshold
+        path: stormRecoveryThreshold
       - description: UnhealthyConditions contains a list of the conditions that determine
           whether a node is considered unhealthy.  The conditions are combined in
           a logical OR, i.e. if any of the conditions is met, the node is unhealthy.
