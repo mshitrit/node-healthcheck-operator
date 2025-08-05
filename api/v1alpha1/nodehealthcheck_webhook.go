@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -27,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,17 +40,18 @@ import (
 )
 
 const (
-	OngoingRemediationError    = "prohibited due to running remediation"
-	minHealthyError            = "minHealthy must not be negative"
-	maxUnhealthyError          = "maxUnhealthy must not be negative"
-	invalidSelectorError       = "Invalid selector"
-	missingSelectorError       = "Selector is mandatory"
-	mandatoryRemediationError  = "Either RemediationTemplate or at least one EscalatingRemediations must be set"
-	mutualRemediationError     = "RemediationTemplate and EscalatingRemediations usage is mutual exclusive"
-	uniqueOrderError           = "EscalatingRemediation Order must be unique"
-	uniqueRemediatorError      = "Using multiple templates of same kind is not supported for this template"
-	minimumTimeoutError        = "EscalatingRemediation Timeout must be at least one minute"
-	unsupportedCpTopologyError = "Unsupported control plane topology"
+	OngoingRemediationError     = "prohibited due to running remediation"
+	minHealthyError             = "minHealthy must not be negative"
+	maxUnhealthyError           = "maxUnhealthy must not be negative"
+	stormRecoveryThresholdError = "stormRecoveryThreshold must not be negative"
+	invalidSelectorError        = "Invalid selector"
+	missingSelectorError        = "Selector is mandatory"
+	mandatoryRemediationError   = "Either RemediationTemplate or at least one EscalatingRemediations must be set"
+	mutualRemediationError      = "RemediationTemplate and EscalatingRemediations usage is mutual exclusive"
+	uniqueOrderError            = "EscalatingRemediation Order must be unique"
+	uniqueRemediatorError       = "Using multiple templates of same kind is not supported for this template"
+	minimumTimeoutError         = "EscalatingRemediation Timeout must be at least one minute"
+	unsupportedCpTopologyError  = "Unsupported control plane topology"
 )
 
 // log is for logging in this package.
@@ -106,8 +108,9 @@ func (v *customValidator) ValidateDelete(_ context.Context, obj runtime.Object) 
 }
 
 func (v *customValidator) validate(ctx context.Context, nhc *NodeHealthCheck) error {
-	aggregated := errors.NewAggregate([]error{
+	aggregated := utilerrors.NewAggregate([]error{
 		ValidateMinHealthyMaxUnhealthy(nhc),
+		v.validateStormRecoveryThreshold(ctx, nhc),
 		v.validateSelector(nhc),
 		v.validateMutualRemediations(nhc),
 		v.validateEscalatingRemediations(ctx, nhc),
@@ -122,14 +125,14 @@ func (v *customValidator) validate(ctx context.Context, nhc *NodeHealthCheck) er
 
 func (v *customValidator) validateControlPlaneTopology() error {
 	if !v.caps.IsSupportedControlPlaneTopology {
-		return fmt.Errorf(unsupportedCpTopologyError)
+		return errors.New(unsupportedCpTopologyError)
 	}
 	return nil
 }
 
 func (v *customValidator) validateSelector(nhc *NodeHealthCheck) error {
 	if len(nhc.Spec.Selector.MatchExpressions) == 0 && len(nhc.Spec.Selector.MatchLabels) == 0 {
-		return fmt.Errorf(missingSelectorError)
+		return errors.New(missingSelectorError)
 	}
 	if _, err := metav1.LabelSelectorAsSelector(&nhc.Spec.Selector); err != nil {
 		return fmt.Errorf("%s: %v", invalidSelectorError, err.Error())
@@ -139,10 +142,10 @@ func (v *customValidator) validateSelector(nhc *NodeHealthCheck) error {
 
 func (v *customValidator) validateMutualRemediations(nhc *NodeHealthCheck) error {
 	if nhc.Spec.RemediationTemplate == nil && len(nhc.Spec.EscalatingRemediations) == 0 {
-		return fmt.Errorf(mandatoryRemediationError)
+		return errors.New(mandatoryRemediationError)
 	}
 	if nhc.Spec.RemediationTemplate != nil && len(nhc.Spec.EscalatingRemediations) > 0 {
-		return fmt.Errorf(mutualRemediationError)
+		return errors.New(mutualRemediationError)
 	}
 	return nil
 }
@@ -152,7 +155,7 @@ func (v *customValidator) validateEscalatingRemediations(ctx context.Context, nh
 		return nil
 	}
 
-	aggregated := errors.NewAggregate([]error{
+	aggregated := utilerrors.NewAggregate([]error{
 		v.validateEscalatingRemediationsUniqueOrder(nhc),
 		v.validateEscalatingRemediationsTimeout(nhc),
 		v.validateEscalatingRemediationsUniqueRemediator(ctx, nhc),
@@ -260,5 +263,68 @@ func ValidateMinHealthyMaxUnhealthy(nhc *NodeHealthCheck) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nhc *NodeHealthCheck) error {
+	// StormRecoveryThreshold is optional, so skip validation if not specified
+	if nhc.Spec.StormRecoveryThreshold == nil {
+		return nil
+	}
+
+	// Check that StormRecoveryThreshold is non-negative when specified as integer
+	if nhc.Spec.StormRecoveryThreshold.Type == intstr.Int && nhc.Spec.StormRecoveryThreshold.IntVal < 0 {
+		return fmt.Errorf("%s: %v", stormRecoveryThresholdError, nhc.Spec.StormRecoveryThreshold)
+	}
+
+	// Fetch nodes matching the selector to get actual total count for comprehensive validation
+	selector, err := metav1.LabelSelectorAsSelector(&nhc.Spec.Selector)
+	if err != nil {
+		// Selector validation should have caught this, but let's be safe
+		return fmt.Errorf("invalid selector for storm recovery validation: %v", err)
+	}
+
+	var nodes corev1.NodeList
+	if err := v.Client.List(ctx, &nodes, client.MatchingLabelsSelector{Selector: selector}); err != nil {
+		// Storm recovery validation requires actual node count - cannot proceed without it
+		return fmt.Errorf("failed to fetch nodes for storm recovery validation: %v", err)
+	}
+
+	totalNodes := len(nodes.Items)
+	if totalNodes == 0 {
+		return errors.New("no nodes match the selector, cannot validate storm recovery threshold")
+	}
+
+	// Get the storm recovery threshold value
+	stormThreshold, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.StormRecoveryThreshold, totalNodes, true)
+	if err != nil {
+		return fmt.Errorf("failed to calculate stormRecoveryThreshold: %v", err)
+	}
+	//TODO mshitrit seems like a code duplication of getMinHealthy in the controller.
+	// Calculate minHealthy directly to validate the critical constraint
+	var minHealthy int
+	if nhc.Spec.MinHealthy != nil {
+		minHealthy, err = intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, totalNodes, true)
+		if err != nil {
+			return fmt.Errorf("failed to calculate minHealthy for storm recovery validation: %v", err)
+		}
+	} else if nhc.Spec.MaxUnhealthy != nil {
+		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, totalNodes, true)
+		if err != nil {
+			return fmt.Errorf("failed to calculate maxUnhealthy for storm recovery validation: %v", err)
+		}
+		minHealthy = totalNodes - maxUnhealthy
+	} else {
+		return errors.New("either minHealthy or maxUnhealthy must be specified for storm recovery validation")
+	}
+
+	// Critical validation: stormRecoveryThreshold < (totalNodes - minHealthy)
+	// This ensures storm recovery can actually be exited and prevents permanent storm recovery lock
+	maxAllowedStormThreshold := totalNodes - minHealthy
+	if stormThreshold >= maxAllowedStormThreshold {
+		return fmt.Errorf("stormRecoveryThreshold (%d) must be less than (totalNodes - minHealthy) = (%d - %d) = %d to prevent permanent storm recovery lock",
+			stormThreshold, totalNodes, minHealthy, maxAllowedStormThreshold)
+	}
+
 	return nil
 }
