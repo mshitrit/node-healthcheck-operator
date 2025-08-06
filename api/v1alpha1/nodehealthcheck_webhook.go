@@ -300,22 +300,11 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 	if err != nil {
 		return fmt.Errorf("failed to calculate stormRecoveryThreshold: %v", err)
 	}
-	//TODO mshitrit seems like a code duplication of getMinHealthy in the controller.
+
 	// Calculate minHealthy directly to validate the critical constraint
-	var minHealthy int
-	if nhc.Spec.MinHealthy != nil {
-		minHealthy, err = intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, totalNodes, true)
-		if err != nil {
-			return fmt.Errorf("failed to calculate minHealthy for storm recovery validation: %v", err)
-		}
-	} else if nhc.Spec.MaxUnhealthy != nil {
-		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, totalNodes, true)
-		if err != nil {
-			return fmt.Errorf("failed to calculate maxUnhealthy for storm recovery validation: %v", err)
-		}
-		minHealthy = totalNodes - maxUnhealthy
-	} else {
-		return errors.New("either minHealthy or maxUnhealthy must be specified for storm recovery validation")
+	minHealthy, err := GetMinHealthy(nhc, totalNodes)
+	if err != nil {
+		return err
 	}
 
 	// Critical validation: stormRecoveryThreshold < (totalNodes - minHealthy)
@@ -327,4 +316,29 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 	}
 
 	return nil
+}
+
+func GetMinHealthy(nhc *NodeHealthCheck, total int) (int, error) {
+	err := ValidateMinHealthyMaxUnhealthy(nhc)
+	if err != nil {
+		return 0, err
+	}
+	if nhc.Spec.MinHealthy != nil {
+		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, total, true)
+		if minHealthy < 0 && err == nil {
+			err = fmt.Errorf("minHealthy is negative: %d", minHealthy)
+		}
+		return minHealthy, err
+	}
+	if nhc.Spec.MaxUnhealthy != nil {
+		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, total, true)
+		if maxUnhealthy < 0 && err == nil {
+			err = fmt.Errorf("maxUnhealthy is negative: %d", maxUnhealthy)
+		}
+		if maxUnhealthy > total && err == nil {
+			err = fmt.Errorf("maxUnhealthy is greater than the number of selected nodes: %d", maxUnhealthy)
+		}
+		return total - maxUnhealthy, err
+	}
+	return 0, fmt.Errorf("one of minHealthy and maxUnhealthy should be specified")
 }

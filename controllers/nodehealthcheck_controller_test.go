@@ -2382,7 +2382,7 @@ var _ = Describe("Node Health Check CR", func() {
 						MaxUnhealthy: maxUnhealthy,
 					},
 				}
-				absoluteMinHealthy, err := getMinHealthy(nhc, totalNodes)
+				absoluteMinHealthy, err := v1alpha1.GetMinHealthy(nhc, totalNodes)
 				if expectedErr != nil {
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(MatchError(expectedErr))

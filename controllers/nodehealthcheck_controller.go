@@ -892,7 +892,7 @@ func isStormRecoveryActive(nhc *remediationv1alpha1.NodeHealthCheck) bool {
 
 func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, inProgressRemediations, total int) (bool, error) {
 	// Get effective minHealthy value (works for both minHealthy and maxUnhealthy configurations)
-	minHealthy, err := getMinHealthy(nhc, total)
+	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, total)
 	if err != nil {
 		return false, err
 	}
@@ -993,7 +993,7 @@ func (r *NodeHealthCheckReconciler) evaluateRemediationPolicy(nhc *remediationv1
 		}
 	} else if nhc.Spec.MaxUnhealthy != nil {
 		// Legacy behavior when storm recovery is not configured but maxUnhealthy is set
-		if minHealthy, err := getMinHealthy(nhc, totalNodes); err != nil {
+		if minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, totalNodes); err != nil {
 			r.Log.Error(err, "failed to calculate min healthy allowed nodes",
 				"maxUnhealthy", nhc.Spec.MaxUnhealthy, "observedNodes", nhc.Status.ObservedNodes)
 			return false, err
@@ -1024,29 +1024,4 @@ func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1
 		r.Log.Info("Storm recovery mode deactivated", "nhc", nhc.Name)
 		commonevents.NormalEvent(r.Recorder, nhc, "StormRecoveryEnded", "Storm recovery mode deactivated - normal remediation resumed")
 	}
-}
-
-func getMinHealthy(nhc *remediationv1alpha1.NodeHealthCheck, total int) (int, error) {
-	err := remediationv1alpha1.ValidateMinHealthyMaxUnhealthy(nhc)
-	if err != nil {
-		return 0, err
-	}
-	if nhc.Spec.MinHealthy != nil {
-		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, total, true)
-		if minHealthy < 0 && err == nil {
-			err = fmt.Errorf("minHealthy is negative: %d", minHealthy)
-		}
-		return minHealthy, err
-	}
-	if nhc.Spec.MaxUnhealthy != nil {
-		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, total, true)
-		if maxUnhealthy < 0 && err == nil {
-			err = fmt.Errorf("maxUnhealthy is negative: %d", maxUnhealthy)
-		}
-		if maxUnhealthy > total && err == nil {
-			err = fmt.Errorf("maxUnhealthy is greater than the number of selected nodes: %d", maxUnhealthy)
-		}
-		return total - maxUnhealthy, err
-	}
-	return 0, fmt.Errorf("one of minHealthy and maxUnhealthy should be specified")
 }
