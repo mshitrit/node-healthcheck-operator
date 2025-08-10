@@ -362,6 +362,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return result, err
 		}
 		updateRequeueAfter(&result, requeueAfter)
+		//TODO mshitrit should we check here for entering SR ?
 
 		// check if we need to alert about a very old remediation CR
 		remediationCRs, err := resourceManager.ListRemediationCRs(utils.GetAllRemediationTemplates(nhc), func(cr unstructured.Unstructured) bool {
