@@ -910,7 +910,7 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, inProgre
 
 	// Enter storm recovery when we're below minHealthy AND have too many concurrent remediations
 	// We need to make sure there are active remediations, because triggering storm recovery mode without any remediations will likely lock us in storm recovery mode.
-	return healthyCount < minHealthy && inProgressRemediations > stormThreshold, nil
+	return healthyCount <= minHealthy && inProgressRemediations > stormThreshold, nil
 }
 
 func shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, unhealthyCount, total int) (bool, error) {
