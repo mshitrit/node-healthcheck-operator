@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -124,7 +124,7 @@ func (in *NodeHealthCheckSpec) DeepCopyInto(out *NodeHealthCheckSpec) {
 	}
 	if in.StormRecoveryThreshold != nil {
 		in, out := &in.StormRecoveryThreshold, &out.StormRecoveryThreshold
-		*out = new(intstr.IntOrString)
+		*out = new(int)
 		**out = **in
 	}
 	if in.RemediationTemplate != nil {

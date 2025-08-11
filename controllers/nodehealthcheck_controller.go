@@ -882,8 +882,7 @@ func getStormRecoveryThreshold(nhc *remediationv1alpha1.NodeHealthCheck, total i
 	if nhc.Spec.StormRecoveryThreshold == nil {
 		return 0, nil
 	}
-	threshold, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.StormRecoveryThreshold, total, true)
-	return threshold, err
+	return *nhc.Spec.StormRecoveryThreshold, nil
 }
 
 func isStormRecoveryActive(nhc *remediationv1alpha1.NodeHealthCheck) bool {

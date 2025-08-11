@@ -2736,7 +2736,7 @@ func newNodeHealthCheckWithStormRecovery() *v1alpha1.NodeHealthCheck {
 	nhc := newNodeHealthCheck()
 	// 7-node cluster: minHealthy=4, stormRecoveryThreshold=1
 	minHealthy := intstr.FromInt(4)
-	stormThreshold := intstr.FromInt(1)
+	stormThreshold := 1
 	nhc.Spec.MinHealthy = &minHealthy
 	nhc.Spec.StormRecoveryThreshold = &stormThreshold
 	return nhc

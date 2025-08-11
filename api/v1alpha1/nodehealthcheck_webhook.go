@@ -272,9 +272,9 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 		return nil
 	}
 
-	// Check that StormRecoveryThreshold is non-negative when specified as integer
-	if nhc.Spec.StormRecoveryThreshold.Type == intstr.Int && nhc.Spec.StormRecoveryThreshold.IntVal < 0 {
-		return fmt.Errorf("%s: %v", stormRecoveryThresholdError, nhc.Spec.StormRecoveryThreshold)
+	// Check that StormRecoveryThreshold is non-negative
+	if *nhc.Spec.StormRecoveryThreshold < 0 {
+		return fmt.Errorf("%s: %d", stormRecoveryThresholdError, *nhc.Spec.StormRecoveryThreshold)
 	}
 
 	// Fetch nodes matching the selector to get actual total count for comprehensive validation
@@ -296,10 +296,7 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 	}
 
 	// Get the storm recovery threshold value
-	stormThreshold, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.StormRecoveryThreshold, totalNodes, true)
-	if err != nil {
-		return fmt.Errorf("failed to calculate stormRecoveryThreshold: %v", err)
-	}
+	stormThreshold := *nhc.Spec.StormRecoveryThreshold
 
 	// Calculate minHealthy directly to validate the critical constraint
 	minHealthy, err := GetMinHealthy(nhc, totalNodes)

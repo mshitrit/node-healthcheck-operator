@@ -437,7 +437,7 @@ var _ = Describe("NodeHealthCheck Validation", func() {
 					// Valid because: 2 < (10-6) = 4
 					mh := intstr.FromString("60%")
 					nhc.Spec.MinHealthy = &mh
-					stormThreshold := intstr.FromInt(2)
+					stormThreshold := 2
 					nhc.Spec.StormRecoveryThreshold = &stormThreshold
 					// Keep the RemediationTemplate from parent BeforeEach
 					nhc.Spec.RemediationTemplate = &v1.ObjectReference{
@@ -479,7 +479,7 @@ var _ = Describe("NodeHealthCheck Validation", func() {
 					// Invalid because: 3 >= (5-3) = 2
 					mh := intstr.FromString("60%")
 					nhc.Spec.MinHealthy = &mh
-					stormThreshold := intstr.FromInt(3)
+					stormThreshold := 3
 					nhc.Spec.StormRecoveryThreshold = &stormThreshold
 					// Keep the RemediationTemplate from parent BeforeEach
 					nhc.Spec.RemediationTemplate = &v1.ObjectReference{
@@ -514,7 +514,7 @@ var _ = Describe("NodeHealthCheck Validation", func() {
 					nhc.Spec.MinHealthy = nil
 					maxUnhealthy := intstr.FromInt(2)
 					nhc.Spec.MaxUnhealthy = &maxUnhealthy
-					stormThreshold := intstr.FromInt(3)
+					stormThreshold := 3
 					nhc.Spec.StormRecoveryThreshold = &stormThreshold
 					// Keep the RemediationTemplate from parent BeforeEach
 					nhc.Spec.RemediationTemplate = &v1.ObjectReference{
