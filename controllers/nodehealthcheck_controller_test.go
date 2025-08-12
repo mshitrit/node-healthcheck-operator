@@ -1975,10 +1975,7 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(5))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(2))
-						//TODO mshitrit remove the if clause
-						if underTest.Status.StormRecoveryActive != nil {
-							g.Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
-						}
+						g.Expect(underTest.Status.StormRecoveryActive).To(BeNil())
 					}, "10s", "1s").Should(Succeed())
 
 					// Phase 2: Make one more node unhealthy - triggers storm recovery

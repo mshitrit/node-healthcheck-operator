@@ -39,19 +39,17 @@ import (
 )
 
 const (
-	OngoingRemediationError = "prohibited due to running remediation"
-	minHealthyError         = "minHealthy must not be negative"
-	maxUnhealthyError       = "maxUnhealthy must not be negative"
-	//TODO mshitrit this seems redundant and already verified
-	stormRecoveryThresholdError = "stormRecoveryThreshold must not be negative"
-	invalidSelectorError        = "Invalid selector"
-	missingSelectorError        = "Selector is mandatory"
-	mandatoryRemediationError   = "Either RemediationTemplate or at least one EscalatingRemediations must be set"
-	mutualRemediationError      = "RemediationTemplate and EscalatingRemediations usage is mutual exclusive"
-	uniqueOrderError            = "EscalatingRemediation Order must be unique"
-	uniqueRemediatorError       = "Using multiple templates of same kind is not supported for this template"
-	minimumTimeoutError         = "EscalatingRemediation Timeout must be at least one minute"
-	unsupportedCpTopologyError  = "Unsupported control plane topology"
+	OngoingRemediationError    = "prohibited due to running remediation"
+	minHealthyError            = "minHealthy must not be negative"
+	maxUnhealthyError          = "maxUnhealthy must not be negative"
+	invalidSelectorError       = "Invalid selector"
+	missingSelectorError       = "Selector is mandatory"
+	mandatoryRemediationError  = "Either RemediationTemplate or at least one EscalatingRemediations must be set"
+	mutualRemediationError     = "RemediationTemplate and EscalatingRemediations usage is mutual exclusive"
+	uniqueOrderError           = "EscalatingRemediation Order must be unique"
+	uniqueRemediatorError      = "Using multiple templates of same kind is not supported for this template"
+	minimumTimeoutError        = "EscalatingRemediation Timeout must be at least one minute"
+	unsupportedCpTopologyError = "Unsupported control plane topology"
 )
 
 // log is for logging in this package.
@@ -270,13 +268,6 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 	// StormRecoveryThreshold is optional, so skip validation if not specified
 	if nhc.Spec.StormRecoveryThreshold == nil {
 		return nil
-	}
-
-	//TODO mshitrit can be removed
-
-	// Check that StormRecoveryThreshold is non-negative
-	if *nhc.Spec.StormRecoveryThreshold < 0 {
-		return fmt.Errorf("%s: %d", stormRecoveryThresholdError, *nhc.Spec.StormRecoveryThreshold)
 	}
 
 	// Fetch nodes matching the selector to get actual total count for comprehensive validation
