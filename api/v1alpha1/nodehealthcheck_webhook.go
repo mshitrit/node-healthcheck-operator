@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -40,9 +39,10 @@ import (
 )
 
 const (
-	OngoingRemediationError     = "prohibited due to running remediation"
-	minHealthyError             = "minHealthy must not be negative"
-	maxUnhealthyError           = "maxUnhealthy must not be negative"
+	OngoingRemediationError = "prohibited due to running remediation"
+	minHealthyError         = "minHealthy must not be negative"
+	maxUnhealthyError       = "maxUnhealthy must not be negative"
+	//TODO mshitrit this seems redundant and already verified
 	stormRecoveryThresholdError = "stormRecoveryThreshold must not be negative"
 	invalidSelectorError        = "Invalid selector"
 	missingSelectorError        = "Selector is mandatory"
@@ -125,14 +125,14 @@ func (v *customValidator) validate(ctx context.Context, nhc *NodeHealthCheck) er
 
 func (v *customValidator) validateControlPlaneTopology() error {
 	if !v.caps.IsSupportedControlPlaneTopology {
-		return errors.New(unsupportedCpTopologyError)
+		return fmt.Errorf(unsupportedCpTopologyError)
 	}
 	return nil
 }
 
 func (v *customValidator) validateSelector(nhc *NodeHealthCheck) error {
 	if len(nhc.Spec.Selector.MatchExpressions) == 0 && len(nhc.Spec.Selector.MatchLabels) == 0 {
-		return errors.New(missingSelectorError)
+		return fmt.Errorf(missingSelectorError)
 	}
 	if _, err := metav1.LabelSelectorAsSelector(&nhc.Spec.Selector); err != nil {
 		return fmt.Errorf("%s: %v", invalidSelectorError, err.Error())
@@ -142,10 +142,10 @@ func (v *customValidator) validateSelector(nhc *NodeHealthCheck) error {
 
 func (v *customValidator) validateMutualRemediations(nhc *NodeHealthCheck) error {
 	if nhc.Spec.RemediationTemplate == nil && len(nhc.Spec.EscalatingRemediations) == 0 {
-		return errors.New(mandatoryRemediationError)
+		return fmt.Errorf(mandatoryRemediationError)
 	}
 	if nhc.Spec.RemediationTemplate != nil && len(nhc.Spec.EscalatingRemediations) > 0 {
-		return errors.New(mutualRemediationError)
+		return fmt.Errorf(mutualRemediationError)
 	}
 	return nil
 }
@@ -272,6 +272,8 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 		return nil
 	}
 
+	//TODO mshitrit can be removed
+
 	// Check that StormRecoveryThreshold is non-negative
 	if *nhc.Spec.StormRecoveryThreshold < 0 {
 		return fmt.Errorf("%s: %d", stormRecoveryThresholdError, *nhc.Spec.StormRecoveryThreshold)
@@ -292,7 +294,7 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 
 	totalNodes := len(nodes.Items)
 	if totalNodes == 0 {
-		return errors.New("no nodes match the selector, cannot validate storm recovery threshold")
+		return fmt.Errorf("no nodes match the selector, cannot validate storm recovery threshold")
 	}
 
 	// Get the storm recovery threshold value
@@ -301,6 +303,7 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 	// Calculate minHealthy directly to validate the critical constraint
 	minHealthy, err := GetMinHealthy(nhc, totalNodes)
 	if err != nil {
+		nodehealthchecklog.Error(err, "failed to calculate the number of minimum healthy nodes")
 		return err
 	}
 

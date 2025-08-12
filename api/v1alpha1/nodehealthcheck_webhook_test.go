@@ -473,7 +473,7 @@ var _ = Describe("NodeHealthCheck Validation", func() {
 				})
 			})
 
-			When("storm recovery threshold too high and percentage minHealthy", func() {
+			When("storm recovery threshold too high with percentage minHealthy", func() {
 				BeforeEach(func() {
 					// Setup: 5 nodes, minHealthy=60% (3), stormRecoveryThreshold=3
 					// Invalid because: 3 >= (5-3) = 2
@@ -507,7 +507,7 @@ var _ = Describe("NodeHealthCheck Validation", func() {
 				})
 			})
 
-			When("storm recovery threshold too high and fixed maxUnhealthy", func() {
+			When("storm recovery threshold too high with fixed maxUnhealthy", func() {
 				BeforeEach(func() {
 					// Setup: 6 nodes, maxUnhealthy=2 (minHealthy=4), stormRecoveryThreshold=3
 					// Invalid because: 3 >= (6-4) = 2
