@@ -897,6 +897,7 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	}
 }
 
+// TODO mshitrit consider removing this method
 func isStormRecoveryActive(nhc *remediationv1alpha1.NodeHealthCheck) bool {
 	return nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive
 }
@@ -921,6 +922,7 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, inProgre
 	return healthyCount <= minHealthy && inProgressRemediations > stormThreshold, nil
 }
 
+// TODO mshitrit consider removing this method, or at least remove the error
 func shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, unhealthyCount int) (bool, error) {
 	// Exit storm recovery when unhealthy nodes drop to manageable levels
 	// This allows resuming normal remediation once the "storm" has calmed down
@@ -929,13 +931,13 @@ func shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, unhealthy
 	return unhealthyCount <= stormThreshold, nil
 }
 
+// TODO mshitrit add method description
 func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, selectedNodes []v1.Node) (bool, error) {
 	totalNodes := len(selectedNodes)
 	healthyCount := *nhc.Status.HealthyNodes
 	if nhc.Spec.StormRecoveryThreshold == nil {
 		return false, nil
 	}
-	// Only apply storm recovery when stormRecoveryThreshold is configured and we have either minHealthy or maxUnhealthy
 	// Count existing remediations
 	inProgressRemediations := r.getRemediationCount(nhc)
 	// Check if we should start storm recovery
@@ -947,6 +949,7 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		return false, err
 	}
 
+	//TODO mshitrit maybe just use Unhealthy ?
 	// Calculate unhealthy count for exit condition
 	unhealthyCount := totalNodes - healthyCount
 

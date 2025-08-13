@@ -270,14 +270,13 @@ func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nh
 		return nil
 	}
 
-	// Fetch nodes matching the selector to get actual total count for comprehensive validation
 	selector, err := metav1.LabelSelectorAsSelector(&nhc.Spec.Selector)
 	if err != nil {
-		// Selector validation should have caught this, but let's be safe
 		return fmt.Errorf("invalid selector for storm recovery validation: %v", err)
 	}
 
 	var nodes corev1.NodeList
+	// Fetch nodes matching the selector to get actual total count for comprehensive validation
 	if err := v.Client.List(ctx, &nodes, client.MatchingLabelsSelector{Selector: selector}); err != nil {
 		// Storm recovery validation requires actual node count - cannot proceed without it
 		return fmt.Errorf("failed to fetch nodes for storm recovery validation: %v", err)
