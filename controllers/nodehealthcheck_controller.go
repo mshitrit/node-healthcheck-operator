@@ -897,11 +897,6 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	}
 }
 
-// TODO mshitrit consider removing this method
-func isStormRecoveryActive(nhc *remediationv1alpha1.NodeHealthCheck) bool {
-	return nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive
-}
-
 func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, inProgressRemediations, total int) (bool, error) {
 	// Get effective minHealthy value (works for both minHealthy and maxUnhealthy configurations)
 	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, total)
@@ -922,19 +917,9 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, inProgre
 	return healthyCount <= minHealthy && inProgressRemediations > stormThreshold, nil
 }
 
-// TODO mshitrit consider removing this method, or at least remove the error
-func shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, unhealthyCount int) (bool, error) {
-	// Exit storm recovery when unhealthy nodes drop to manageable levels
-	// This allows resuming normal remediation once the "storm" has calmed down
-	stormThreshold := *nhc.Spec.StormRecoveryThreshold
-
-	return unhealthyCount <= stormThreshold, nil
-}
-
-// TODO mshitrit add method description
+// evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
 func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, selectedNodes []v1.Node) (bool, error) {
 	totalNodes := len(selectedNodes)
-	healthyCount := *nhc.Status.HealthyNodes
 	if nhc.Spec.StormRecoveryThreshold == nil {
 		return false, nil
 	}
@@ -949,18 +934,8 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		return false, err
 	}
 
-	//TODO mshitrit maybe just use Unhealthy ?
-	// Calculate unhealthy count for exit condition
-	unhealthyCount := totalNodes - healthyCount
-
 	// Check if we should exit storm recovery
-	shouldExit, err := shouldExitStormRecovery(nhc, unhealthyCount)
-	if err != nil {
-		r.Log.Error(err, "failed to evaluate storm recovery exit condition",
-			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
-			"stormRecoveryThreshold", nhc.Spec.StormRecoveryThreshold, "observedNodes", nhc.Status.ObservedNodes)
-		return false, err
-	}
+	shouldExit := len(nhc.Status.UnhealthyNodes) <= *nhc.Spec.StormRecoveryThreshold
 
 	// Update storm recovery status
 	if shouldStart {
@@ -969,7 +944,8 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		r.updateStormRecoveryStatus(nhc, false)
 	}
 
-	return isStormRecoveryActive(nhc), nil
+	isStormRecoveryActive := nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive
+	return isStormRecoveryActive, nil
 }
 
 func (r *NodeHealthCheckReconciler) getRemediationCount(nhc *remediationv1alpha1.NodeHealthCheck) int {
@@ -983,14 +959,15 @@ func (r *NodeHealthCheckReconciler) getRemediationCount(nhc *remediationv1alpha1
 }
 
 func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1alpha1.NodeHealthCheck, activate bool) {
-	if activate && !isStormRecoveryActive(nhc) {
+	isStormRecoveryActive := nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive
+	if activate && !isStormRecoveryActive {
 		// Start storm recovery
 		nhc.Status.StormRecoveryActive = pointer.Bool(true)
 		now := metav1.Time{Time: currentTime()}
 		nhc.Status.StormRecoveryStartTime = &now
 		r.Log.Info("Storm recovery mode activated", "nhc", nhc.Name)
 		commonevents.WarningEvent(r.Recorder, nhc, "StormRecoveryStarted", "Storm recovery mode activated - delaying remediation until threshold is reached")
-	} else if !activate && isStormRecoveryActive(nhc) {
+	} else if !activate && isStormRecoveryActive {
 		// End storm recovery
 		nhc.Status.StormRecoveryActive = pointer.Bool(false)
 		nhc.Status.StormRecoveryStartTime = nil
