@@ -264,7 +264,7 @@ Key insight: Those 2 additional failed nodes get NO remediation
 If (Maximum number of remediation is reached):
   → Block creation of new remediations
   → Existing remediations continue
-  → Wait until current remeditions are below maximum before creating more (as defined by minHealthy/maxUnhealthy)
+  → Wait until current remediations are below maximum before creating more (as defined by minHealthy/maxUnhealthy)
 ```
 
 **Storm Recovery Enhancement**:
