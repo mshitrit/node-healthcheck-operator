@@ -108,7 +108,6 @@ func (v *customValidator) ValidateDelete(_ context.Context, obj runtime.Object) 
 func (v *customValidator) validate(ctx context.Context, nhc *NodeHealthCheck) error {
 	aggregated := utilerrors.NewAggregate([]error{
 		ValidateMinHealthyMaxUnhealthy(nhc),
-		v.validateStormRecoveryThreshold(ctx, nhc),
 		v.validateSelector(nhc),
 		v.validateMutualRemediations(nhc),
 		v.validateEscalatingRemediations(ctx, nhc),
@@ -261,50 +260,6 @@ func ValidateMinHealthyMaxUnhealthy(nhc *NodeHealthCheck) error {
 			}
 		}
 	}
-	return nil
-}
-
-func (v *customValidator) validateStormRecoveryThreshold(ctx context.Context, nhc *NodeHealthCheck) error {
-	// StormRecoveryThreshold is optional, so skip validation if not specified
-	if nhc.Spec.StormRecoveryThreshold == nil {
-		return nil
-	}
-
-	selector, err := metav1.LabelSelectorAsSelector(&nhc.Spec.Selector)
-	if err != nil {
-		return fmt.Errorf("invalid selector for storm recovery validation: %v", err)
-	}
-
-	var nodes corev1.NodeList
-	// Fetch nodes matching the selector to get actual total count for comprehensive validation
-	if err := v.Client.List(ctx, &nodes, client.MatchingLabelsSelector{Selector: selector}); err != nil {
-		// Storm recovery validation requires actual node count - cannot proceed without it
-		return fmt.Errorf("failed to fetch nodes for storm recovery validation: %v", err)
-	}
-
-	totalNodes := len(nodes.Items)
-	if totalNodes == 0 {
-		return fmt.Errorf("no nodes match the selector, cannot validate storm recovery threshold")
-	}
-
-	// Get the storm recovery threshold value
-	stormThreshold := *nhc.Spec.StormRecoveryThreshold
-
-	// Calculate minHealthy directly to validate the critical constraint
-	minHealthy, err := GetMinHealthy(nhc, totalNodes)
-	if err != nil {
-		nodehealthchecklog.Error(err, "failed to calculate the number of minimum healthy nodes")
-		return err
-	}
-
-	// Critical validation: stormRecoveryThreshold < (totalNodes - minHealthy)
-	// This ensures storm recovery can actually be exited and prevents permanent storm recovery lock
-	maxAllowedStormThreshold := totalNodes - minHealthy
-	if stormThreshold >= maxAllowedStormThreshold {
-		return fmt.Errorf("stormRecoveryThreshold (%d) must be less than (totalNodes - minHealthy) = (%d - %d) = %d to prevent permanent storm recovery lock",
-			stormThreshold, totalNodes, minHealthy, maxAllowedStormThreshold)
-	}
-
 	return nil
 }
 

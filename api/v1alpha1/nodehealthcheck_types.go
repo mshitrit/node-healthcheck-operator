@@ -107,18 +107,6 @@ type NodeHealthCheckSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	MaxUnhealthy *intstr.IntOrString `json:"maxUnhealthy,omitempty"`
 
-	// StormRecoveryThreshold defines the number of unhealthy nodes at which storm recovery mode should exit.
-	// When the number of unhealthy nodes drops to this threshold or below, the storm recovery mode will deactivate,
-	// allowing creation of new remediations.
-	//
-	// This threshold must be less than (totalNodes - minHealthy) to prevent permanent storm recovery lock.
-	// This parameter is optional and when not specified, the original minHealthy/maxUnhealthy behavior is preserved.
-	//
-	//+optional
-	//+kubebuilder:validation:Minimum=0
-	//+operator-sdk:csv:customresourcedefinitions:type=spec
-	StormRecoveryThreshold *int `json:"stormRecoveryThreshold,omitempty"`
-
 	// StormTerminationDelay introduces a configurable delay after storm recovery
 	// exit criteria are satisfied (for example, when the number of healthy nodes
 	// rises above the configured minHealthy constraint). While this

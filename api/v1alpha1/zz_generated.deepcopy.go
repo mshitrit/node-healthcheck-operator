@@ -122,11 +122,6 @@ func (in *NodeHealthCheckSpec) DeepCopyInto(out *NodeHealthCheckSpec) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
-	if in.StormRecoveryThreshold != nil {
-		in, out := &in.StormRecoveryThreshold, &out.StormRecoveryThreshold
-		*out = new(int)
-		**out = **in
-	}
 	if in.StormTerminationDelay != nil {
 		in, out := &in.StormTerminationDelay, &out.StormTerminationDelay
 		*out = new(v1.Duration)
