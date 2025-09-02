@@ -119,6 +119,23 @@ type NodeHealthCheckSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	StormRecoveryThreshold *int `json:"stormRecoveryThreshold,omitempty"`
 
+	// StormTerminationDelay introduces a configurable delay after storm recovery
+	// exit criteria are satisfied (for example, when the number of healthy nodes
+	// rises above the configured minHealthy constraint). While this
+	// delay is in effect, NHC remains in storm recovery mode and does not create
+	// new remediations. Once the delay elapses, storm recovery mode exits and normal
+	// remediation resumes.
+	//
+	// Expects a string of decimal numbers each with optional fraction and a unit
+	// suffix, e.g. "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us"
+	// (or "µs"), "ms", "s", "m", "h".
+	//
+	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Type=string
+	//+optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	StormTerminationDelay *metav1.Duration `json:"stormTerminationDelay,omitempty"`
+
 	// RemediationTemplate is a reference to a remediation template
 	// provided by an infrastructure provider.
 	//
