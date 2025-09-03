@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -357,7 +358,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	//TODO mshitrit improve storm code readability
-	isLessOrEqualMinHealthy, _ := shouldStartStormRecovery(nhc, len(selectedNodes))
+	isLessOrEqualMinHealthy := shouldStartStormRecovery(nhc, 0)
 	if stormRecoveryActive && !isLessOrEqualMinHealthy {
 		stormTerminationRequeueDelay := time.Now().Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
 		updateRequeueAfter(&result, &stormTerminationRequeueDelay)
@@ -903,29 +904,31 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	}
 }
 
-func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, total int) (bool, error) {
-	// Get effective minHealthy value (works for both minHealthy and maxUnhealthy configurations)
-	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, total)
-	if err != nil {
-		return false, err
+func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+	if ptr.Deref(nhc.Status.StormRecoveryActive, false) {
+		return false
 	}
 
-	healthyCount := 0
-	if nhc.Status.HealthyNodes != nil {
-		healthyCount = *nhc.Status.HealthyNodes
-	}
-
-	return healthyCount <= minHealthy, nil
+	return isMinHealthyConstraintTriggered(nhc, minHealthy)
 }
 
-func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, isBelowOrEqualMinHealthy bool) bool {
+func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	isActive := nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive == true
 	isDelayElapsed := false
 	if isActive {
 		isDelayElapsed = time.Now().After(nhc.Status.StormRecoveryStartTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
 	}
-	shouldExist := isActive && !isBelowOrEqualMinHealthy && isDelayElapsed
+	shouldExist := isActive && !isMinHealthyConstraintTriggered(nhc, minHealthy) && isDelayElapsed
 	return shouldExist
+}
+
+func isMinHealthyConstraintTriggered(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+	healthyCount := 0
+	if nhc.Status.HealthyNodes != nil {
+		healthyCount = *nhc.Status.HealthyNodes
+	}
+
+	return healthyCount <= minHealthy
 }
 
 // evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
@@ -934,17 +937,18 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 	if nhc.Spec.StormTerminationDelay == nil {
 		return false, nil
 	}
-	// Check if we should start storm recovery
-	shouldStart, err := shouldStartStormRecovery(nhc, totalNodes)
+	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, totalNodes)
 	if err != nil {
 		r.Log.Error(err, "failed to evaluate storm recovery start condition",
 			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
 			"stormTerminationDelay", nhc.Spec.StormTerminationDelay, "observedNodes", nhc.Status.ObservedNodes)
 		return false, err
 	}
+	// Check if we should start storm recovery
+	shouldStart := shouldStartStormRecovery(nhc, minHealthy)
 
 	// Check if we should exit storm recovery
-	shouldExit := shouldExistStormRecovery(nhc, shouldStart)
+	shouldExit := shouldExistStormRecovery(nhc, minHealthy)
 
 	// Update storm recovery status
 	if shouldStart {
