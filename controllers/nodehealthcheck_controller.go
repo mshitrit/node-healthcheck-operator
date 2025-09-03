@@ -913,7 +913,7 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealt
 }
 
 func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	isActive := nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive == true
+	isActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
 	isDelayElapsed := false
 	if isActive {
 		isDelayElapsed = time.Now().After(nhc.Status.StormRecoveryStartTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
@@ -957,7 +957,7 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		r.updateStormRecoveryStatus(nhc, false)
 	}
 
-	isStormRecoveryActive := nhc.Status.StormRecoveryActive != nil && *nhc.Status.StormRecoveryActive
+	isStormRecoveryActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
 	return isStormRecoveryActive, nil
 }
 
