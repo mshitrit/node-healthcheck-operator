@@ -1964,7 +1964,7 @@ var _ = Describe("Node Health Check CR", func() {
 			When("storm recovery activates and then exits", func() {
 				BeforeEach(func() {
 					underTest = newNodeHealthCheckWithStormRecovery()
-					setupObjects(2, 5, true) // 2 unhealthy, 5 healthy = 7 total
+					setupObjects(3, 4, true) // 2 unhealthy, 5 healthy = 7 total
 				})
 
 				It("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
@@ -1977,12 +1977,12 @@ var _ = Describe("Node Health Check CR", func() {
 					By("verifying initial normal operation")
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
-						g.Expect(*underTest.Status.HealthyNodes).To(Equal(5))
-						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(2))
+						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
 						g.Expect(underTest.Status.StormRecoveryActive).To(BeNil())
 					}, "10s", "1s").Should(Succeed())
 
-					// Phase 2: Make the third node unhealthy - triggers storm recovery
+					// Phase 2: Make the forth node unhealthy - triggers storm recovery
 					By("making one more node unhealthy - triggers storm recovery")
 					node = &v1.Node{}
 					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: "healthy-worker-node-1"}, node)).To(Succeed())
@@ -2015,6 +2015,8 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
 					}, "1s", "100ms").Should(Succeed())
+
+					//wait for node to recover
 
 					//TODO mshitrit check timing , should exist SR after 1 second
 					// Phase 4: wait for the delay to pass

@@ -334,7 +334,8 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// check if we have enough healthy nodes
 	skipRemediation := false
-	if minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, len(selectedNodes)); err != nil {
+	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, len(selectedNodes))
+	if err != nil {
 		log.Error(err, "failed to calculate min healthy allowed nodes",
 			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy, "observedNodes", nhc.Status.ObservedNodes)
 		return result, err
@@ -346,10 +347,8 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// check if we have enough healthy nodes and manage storm recovery
-	stormRecoveryActive, err := r.evaluateStormRecovery(nhc, selectedNodes)
-	if err != nil {
-		return result, err
-	}
+	stormRecoveryActive := r.evaluateStormRecovery(nhc, minHealthy)
+
 	if stormRecoveryActive && !skipRemediation {
 		msg := fmt.Sprint("Storm recovery active: skipping creation of new remediations")
 		r.Log.Info(msg)
@@ -358,8 +357,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	//TODO mshitrit improve storm code readability
-	isLessOrEqualMinHealthy := shouldStartStormRecovery(nhc, 0)
-	if stormRecoveryActive && !isLessOrEqualMinHealthy {
+	if stormRecoveryActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) {
 		stormTerminationRequeueDelay := time.Now().Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
 		updateRequeueAfter(&result, &stormTerminationRequeueDelay)
 	}
@@ -909,7 +907,7 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealt
 		return false
 	}
 
-	return isMinHealthyConstraintTriggered(nhc, minHealthy)
+	return !isMinHealthyConstraintSatisfied(nhc, minHealthy)
 }
 
 func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
@@ -918,31 +916,23 @@ func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealt
 	if isActive {
 		isDelayElapsed = time.Now().After(nhc.Status.StormRecoveryStartTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
 	}
-	shouldExist := isActive && !isMinHealthyConstraintTriggered(nhc, minHealthy) && isDelayElapsed
+	shouldExist := isActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) && isDelayElapsed
 	return shouldExist
 }
 
-func isMinHealthyConstraintTriggered(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+func isMinHealthyConstraintSatisfied(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	healthyCount := 0
 	if nhc.Status.HealthyNodes != nil {
 		healthyCount = *nhc.Status.HealthyNodes
 	}
 
-	return healthyCount <= minHealthy
+	return healthyCount >= minHealthy
 }
 
 // evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
-func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, selectedNodes []v1.Node) (bool, error) {
-	totalNodes := len(selectedNodes)
+func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	if nhc.Spec.StormTerminationDelay == nil {
-		return false, nil
-	}
-	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, totalNodes)
-	if err != nil {
-		r.Log.Error(err, "failed to evaluate storm recovery start condition",
-			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy,
-			"stormTerminationDelay", nhc.Spec.StormTerminationDelay, "observedNodes", nhc.Status.ObservedNodes)
-		return false, err
+		return false
 	}
 	// Check if we should start storm recovery
 	shouldStart := shouldStartStormRecovery(nhc, minHealthy)
@@ -958,7 +948,7 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 	}
 
 	isStormRecoveryActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
-	return isStormRecoveryActive, nil
+	return isStormRecoveryActive
 }
 
 func (r *NodeHealthCheckReconciler) getRemediationCount(nhc *remediationv1alpha1.NodeHealthCheck) int {
