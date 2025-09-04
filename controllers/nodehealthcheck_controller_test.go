@@ -2015,12 +2015,21 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
 					}, "1s", "100ms").Should(Succeed())
-
+					//debugDelay()
 					//wait for node to recover
+					//Expect Storm Recovery mode to end
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
+					}, "15s", "100ms").Should(Succeed())
 
 					//TODO mshitrit check timing , should exist SR after 1 second
 					// Phase 4: wait for the delay to pass
 					time.Sleep(time.Millisecond * 2500)
+					//debugDelay()
+					Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+					Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
+					Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
 
 					//Expect Storm Recovery mode to end
 					Eventually(func(g Gomega) {
@@ -2605,7 +2614,8 @@ var _ = Describe("Node Health Check CR", func() {
 
 // TODO mshitrit remove
 func debugDelay() {
-	for i := 0; i < 10; i++ {
+	isBreak := false
+	for i := 0; i < 10 && !isBreak; i++ {
 		time.Sleep(time.Second)
 	}
 }
