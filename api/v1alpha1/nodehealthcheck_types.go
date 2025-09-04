@@ -283,6 +283,8 @@ type NodeHealthCheckStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status,xDescriptors="urn:alm:descriptor:io.kubernetes.phase:reason"
 	Reason string `json:"reason,omitempty"`
 
+	//TODO mshitrit move to a condition
+
 	// StormRecoveryActive indicates if storm recovery mode is currently active.
 	// Storm recovery mode is activated when the number of healthy nodes drops to or below minHealthy,
 	// and remediation is delayed until the number of unhealthy nodes reaches stormRecoveryThreshold.
@@ -300,6 +302,15 @@ type NodeHealthCheckStatus struct {
 	//+kubebuilder:validation:Format=date-time
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	StormRecoveryStartTime *metav1.Time `json:"stormRecoveryStartTime,omitempty"`
+
+	// StormRegainingHealthyConstraintTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
+	// and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
+	//
+	//+optional
+	//+kubebuilder:validation:Type=string
+	//+kubebuilder:validation:Format=date-time
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	StormRegainingHealthyConstraintTime *metav1.Time `json:"stormRegainingHealthyConstraintTime,omitempty"`
 
 	// LastUpdateTime is the last time the status was updated.
 	//

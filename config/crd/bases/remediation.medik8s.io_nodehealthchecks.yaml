@@ -464,6 +464,12 @@ spec:
                   how long the system has been in storm recovery mode.
                 format: date-time
                 type: string
+              stormRegainingHealthyConstraintTime:
+                description: |-
+                  StormRegainingHealthyConstraintTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
+                  and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
+                format: date-time
+                type: string
               unhealthyNodes:
                 description: UnhealthyNodes tracks currently unhealthy nodes and their
                   remediations.
