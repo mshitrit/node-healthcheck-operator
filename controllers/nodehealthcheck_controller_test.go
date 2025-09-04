@@ -1980,7 +1980,7 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
 						g.Expect(underTest.Status.StormRecoveryActive).To(BeNil())
-					}, "10s", "1s").Should(Succeed())
+					}, "5s", "1s").Should(Succeed())
 
 					// Phase 2: Make the forth node unhealthy - triggers storm recovery
 					By("making one more node unhealthy - triggers storm recovery")
@@ -1989,70 +1989,55 @@ var _ = Describe("Node Health Check CR", func() {
 					node.Status.Conditions[0].Status = v1.ConditionFalse
 					node.Status.Conditions[0].LastTransitionTime = metav1.Now()
 					Expect(k8sClient.Status().Update(context.Background(), node)).To(Succeed())
-
+					// wait for node to turn unhealthy
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
-						//g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
-						//g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(4))
+					}, "15s", "100ms").Should(Succeed())
+
+					// Verify Storm recovery is activated
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+						g.Expect(*underTest.Status.HealthyNodes).To(Equal(3))
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(4))
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
 						g.Expect(underTest.Status.StormRecoveryStartTime).ToNot(BeNil())
-					}, "15s", "100ms").Should(Succeed())
+					}, "5s", "100ms").Should(Succeed())
 
 					// Phase 3: Recover one node - storm recovery remains active due to 2-second delay
-					By("recovering one node - storm recovery remains active")
+					By("recovering one node - storm recovery remains active due to 2-second delay")
 					node = &v1.Node{}
 					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: "unhealthy-worker-node-1"}, node)).To(Succeed())
 					node.Status.Conditions[0].Status = v1.ConditionTrue
 					node.Status.Conditions[0].LastTransitionTime = metav1.Now()
+					t := time.Now()
 					Expect(k8sClient.Status().Update(context.Background(), node)).To(Succeed())
 
-					//debugDelay()
-					Consistently(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
-						//g.Expect(*underTest.Status.HealthyNodes).To(Equal(5))
-						//g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(2))
-						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
-						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
-					}, "1s", "100ms").Should(Succeed())
-					//debugDelay()
 					//wait for node to recover
-					//Expect Storm Recovery mode to end
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
-					}, "15s", "100ms").Should(Succeed())
+					}, "5s", "100ms").Should(Succeed())
+					elapsed := time.Now().Sub(t).Seconds()
+					By(fmt.Sprintf("Elasped time for node recovery is: %v seconds", elapsed))
+					Consistently(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
+						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
+						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
+						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
+					}, "2s", "100ms").Should(Succeed())
 
-					//TODO mshitrit check timing , should exist SR after 1 second
 					// Phase 4: wait for the delay to pass
-					time.Sleep(time.Millisecond * 2500)
-					//debugDelay()
-					Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
-					Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
-					Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
-
+					time.Sleep(time.Millisecond * 1500)
 					//Expect Storm Recovery mode to end
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
-					}, "15s", "100ms").Should(Succeed())
+					}, "1500ms", "100ms").Should(Succeed())
 
-					/*By("recovering one more node - exits storm recovery")
-					node = &v1.Node{}
-					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: "unhealthy-worker-node-2"}, node)).To(Succeed())
-					node.Status.Conditions[0].Status = v1.ConditionTrue
-					node.Status.Conditions[0].LastTransitionTime = metav1.Now()
-					Expect(k8sClient.Status().Update(context.Background(), node)).To(Succeed())
-
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
-						g.Expect(*underTest.Status.HealthyNodes).To(Equal(6))
-						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(1))
-						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
-						g.Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
-						g.Expect(underTest.Status.StormRecoveryStartTime).To(BeNil())
-					}, "10s", "1s").Should(Succeed())*/
 				})
 			})
 		})
