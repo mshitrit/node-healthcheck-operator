@@ -358,8 +358,17 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//TODO mshitrit improve storm code readability
 	if stormRecoveryActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) {
-		stormTerminationRequeueDelay := time.Now().Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
-		updateRequeueAfter(&result, &stormTerminationRequeueDelay)
+		now := time.Now()
+		elapsedTime := now.Sub(nhc.Status.StormRecoveryStartTime.Time)
+		timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
+		//Add some buffer
+		if timeLeft < 0 {
+			timeLeft = time.Second
+		} else {
+			timeLeft += time.Second
+		}
+		//stormTerminationRequeueDelay := now.Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
+		updateRequeueAfter(&result, &timeLeft)
 	}
 
 	// remediate unhealthy nodes
@@ -902,7 +911,7 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	}
 }
 
-func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	if ptr.Deref(nhc.Status.StormRecoveryActive, false) {
 		return false
 	}
@@ -910,7 +919,7 @@ func shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealt
 	return !isMinHealthyConstraintSatisfied(nhc, minHealthy)
 }
 
-func shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+func (r *NodeHealthCheckReconciler) shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	isActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
 	isDelayElapsed := false
 	if isActive {
@@ -935,10 +944,10 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		return false
 	}
 	// Check if we should start storm recovery
-	shouldStart := shouldStartStormRecovery(nhc, minHealthy)
+	shouldStart := r.shouldStartStormRecovery(nhc, minHealthy)
 
 	// Check if we should exit storm recovery
-	shouldExit := shouldExistStormRecovery(nhc, minHealthy)
+	shouldExit := r.shouldExistStormRecovery(nhc, minHealthy)
 
 	// Update storm recovery status
 	if shouldStart {
