@@ -363,13 +363,14 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
 		r.Log.Info("evaluateStormRecovery about to exit Storm Mode", "time (ms) since passed since starting Storm Mode", debugCalculateSMTime(nhc), "timeLeft", timeLeft.Milliseconds())
 		//Add some buffer
+		var requeueAfter *time.Duration
 		if timeLeft < 0 {
-			timeLeft = time.Second
+			requeueAfter = ptr.To(time.Second)
 		} else {
-			timeLeft += time.Second
+			requeueAfter = ptr.To(timeLeft + time.Second)
 		}
 		//stormTerminationRequeueDelay := now.Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
-		updateRequeueAfter(&result, &timeLeft)
+		updateRequeueAfter(&result, requeueAfter)
 	}
 
 	// remediate unhealthy nodes
