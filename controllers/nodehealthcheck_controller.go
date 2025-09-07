@@ -358,17 +358,17 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//TODO mshitrit improve storm code readability
 	if stormRecoveryActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) && nhc.Status.StormRegainingHealthyConstraintTime != nil {
-		now := time.Now()
-		elapsedTime := now.Sub(nhc.Status.StormRegainingHealthyConstraintTime.Time)
+		// elapsedTime since storm exit delay has kicked in
+		elapsedTime := time.Now().Sub(nhc.Status.StormRegainingHealthyConstraintTime.Time)
+		// time left before storm should finish
 		timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
-		//Add some buffer
+		//Add some requeue buffer
 		var requeueAfter *time.Duration
 		if timeLeft < 0 {
 			requeueAfter = ptr.To(time.Second)
 		} else {
 			requeueAfter = ptr.To(timeLeft + time.Second)
 		}
-		//stormTerminationRequeueDelay := now.Add(nhc.Spec.StormTerminationDelay.Duration).Sub(nhc.Status.StormRecoveryStartTime.Time) + time.Second
 		r.Log.Info("evaluateStormRecovery about to exit Storm Mode", "time (ms) since passed since starting Storm Mode", debugCalculateSMTime(nhc), "timeLeft", timeLeft.Milliseconds(), "requeueAfter (ms)", requeueAfter.Milliseconds())
 		updateRequeueAfter(&result, requeueAfter)
 	}
