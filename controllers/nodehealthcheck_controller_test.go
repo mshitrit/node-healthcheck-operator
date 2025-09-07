@@ -1966,8 +1966,7 @@ var _ = Describe("Node Health Check CR", func() {
 					underTest = newNodeHealthCheckWithStormRecovery()
 					setupObjects(3, 4, true) // 2 unhealthy, 5 healthy = 7 total
 				})
-				// TODO mshitrit check for recurring storms
-				FIt("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
+				It("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
 					var node *v1.Node
 
 					// Phase 1: Verify initial state - normal operation
@@ -2601,14 +2600,6 @@ var _ = Describe("Node Health Check CR", func() {
 		)
 	})
 })
-
-// TODO mshitrit remove
-func debugDelay() {
-	isBreak := false
-	for i := 0; i < 10 && !isBreak; i++ {
-		time.Sleep(time.Second)
-	}
-}
 
 func mockLeaseParams(mockRequeueDurationIfLeaseTaken, mockDefaultLeaseDuration, mockLeaseBuffer time.Duration) {
 	orgRequeueIfLeaseTaken := resources.RequeueIfLeaseTaken
