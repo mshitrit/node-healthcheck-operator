@@ -1967,18 +1967,18 @@ var _ = Describe("Node Health Check CR", func() {
 					setupObjects(3, 4, true) // 2 unhealthy, 5 healthy = 7 total
 				})
 				// TODO mshitrit check for recurring storms
-				It("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
-					//TODO mshitrit check remediation count
-					//Skip("need to fix")
+				FIt("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
 					var node *v1.Node
 
 					// Phase 1: Verify initial state - normal operation
 					By("verifying initial normal operation")
+					// 7 total, 4 healthy, 3 unhealthy, 3 remediations
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
 						g.Expect(underTest.Status.StormRecoveryActive).To(BeNil())
+						g.Expect(getRemediationsCount(underTest)).To(Equal(3))
 					}, "5s", "1s").Should(Succeed())
 
 					// Phase 2: Make the forth node unhealthy - triggers storm recovery
@@ -1995,10 +1995,12 @@ var _ = Describe("Node Health Check CR", func() {
 					}, "15s", "100ms").Should(Succeed())
 
 					// Verify Storm recovery is activated
+					// 7 total, 3 healthy, 4 unhealthy, 3 remediations (additional remediation not created because of min healthy constraint)
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(3))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(4))
+						g.Expect(getRemediationsCount(underTest)).To(Equal(3))
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
 						g.Expect(underTest.Status.StormRecoveryStartTime).ToNot(BeNil())
@@ -2020,10 +2022,12 @@ var _ = Describe("Node Health Check CR", func() {
 					}, "5s", "100ms").Should(Succeed())
 					elapsed := time.Now().Sub(t).Seconds()
 					By(fmt.Sprintf("Elasped time for node recovery is: %v seconds", elapsed))
+					// 7 total, 4 healthy, 3 unhealthy, 2 remediations (one removed due to healthy node), 1 remediation is pending to be created (not created because of storm)
 					Consistently(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
+						g.Expect(getRemediationsCount(underTest)).To(Equal(2))
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeTrue())
 					}, "2s", "100ms").Should(Succeed())
@@ -2031,10 +2035,12 @@ var _ = Describe("Node Health Check CR", func() {
 					// Phase 4: wait for the delay to pass
 					time.Sleep(time.Millisecond * 1500)
 					//Expect Storm Recovery mode to end
+					// 7 total, 4 healthy, 3 unhealthy, 3 remediations (pending remediation created when storm is done)
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(underTest.Status.StormRecoveryActive).ToNot(BeNil())
 						g.Expect(*underTest.Status.StormRecoveryActive).To(BeFalse())
+						g.Expect(getRemediationsCount(underTest)).To(Equal(3))
 					}, "1500ms", "100ms").Should(Succeed())
 
 				})
@@ -2660,6 +2666,28 @@ func findRemediationCRForTemplate(nodeName string, nhc *v1alpha1.NodeHealthCheck
 		}
 	}
 	return nil
+}
+
+func getRemediationsCount(nhc *v1alpha1.NodeHealthCheck) int {
+	if nhc.Spec.RemediationTemplate != nil {
+		return getRemediationsCountForTemplate(nhc, *nhc.Spec.RemediationTemplate)
+	}
+
+	count := 0
+	for _, escalationRemediation := range nhc.Spec.EscalatingRemediations {
+		count += getRemediationsCountForTemplate(nhc, escalationRemediation.RemediationTemplate)
+	}
+
+	return count
+}
+
+func getRemediationsCountForTemplate(nhc *v1alpha1.NodeHealthCheck, templateRef v1.ObjectReference) int {
+	baseCr := newBaseCR(nhc, templateRef)
+	crList := &unstructured.UnstructuredList{Object: baseCr.Object}
+	if err := k8sClient.List(ctx, crList); err == nil {
+		return len(crList.Items)
+	}
+	return 0
 }
 
 func newBaseCR(nhc *v1alpha1.NodeHealthCheck, templateRef v1.ObjectReference) unstructured.Unstructured {
