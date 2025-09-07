@@ -347,30 +347,14 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// check if we have enough healthy nodes and manage storm recovery
-	stormRecoveryActive := r.evaluateStormRecovery(nhc, minHealthy)
+	stormRecoveryActive, requeueAfter := r.evaluateStormRecovery(nhc, minHealthy)
+	updateRequeueAfter(&result, requeueAfter)
 
 	if stormRecoveryActive && !skipRemediation {
 		msg := fmt.Sprint("Storm recovery active: skipping creation of new remediations")
 		r.Log.Info(msg)
 		commonevents.WarningEvent(r.Recorder, nhc, utils.EventReasonRemediationSkipped, msg)
 		skipRemediation = true
-	}
-
-	//TODO mshitrit improve storm code readability
-	if stormRecoveryActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) && nhc.Status.StormRegainingHealthyConstraintTime != nil {
-		// elapsedTime since storm exit delay has kicked in
-		elapsedTime := time.Now().Sub(nhc.Status.StormRegainingHealthyConstraintTime.Time)
-		// time left before storm should finish
-		timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
-		//Add some requeue buffer
-		var requeueAfter *time.Duration
-		if timeLeft < 0 {
-			requeueAfter = ptr.To(time.Second)
-		} else {
-			requeueAfter = ptr.To(timeLeft + time.Second)
-		}
-		r.Log.Info("evaluateStormRecovery about to exit Storm Mode", "time (ms) since passed since starting Storm Mode", debugCalculateSMTime(nhc), "timeLeft", timeLeft.Milliseconds(), "requeueAfter (ms)", requeueAfter.Milliseconds())
-		updateRequeueAfter(&result, requeueAfter)
 	}
 
 	// remediate unhealthy nodes
@@ -950,9 +934,9 @@ func isMinHealthyConstraintSatisfied(nhc *remediationv1alpha1.NodeHealthCheck, m
 }
 
 // evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
-func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
+func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) (bool, *time.Duration) {
 	if nhc.Spec.StormTerminationDelay == nil {
-		return false
+		return false, nil
 	}
 	r.Log.Info("evaluateStormRecovery starts")
 	// Check if we should start storm recovery
@@ -979,7 +963,24 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 
 	isStormRecoveryActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
 
-	return isStormRecoveryActive
+	return isStormRecoveryActive, calculateRequeue(isStormRecoveryActive, nhc)
+}
+
+func calculateRequeue(active bool, nhc *remediationv1alpha1.NodeHealthCheck) *time.Duration {
+	if !active || nhc.Status.StormRegainingHealthyConstraintTime == nil {
+		return nil
+	}
+	elapsedTime := time.Now().Sub(nhc.Status.StormRegainingHealthyConstraintTime.Time)
+	// time left before storm should finish
+	timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
+	//Add some requeue buffer
+	var requeueAfter *time.Duration
+	if timeLeft < 0 {
+		requeueAfter = ptr.To(time.Second)
+	} else {
+		requeueAfter = ptr.To(timeLeft + time.Second)
+	}
+	return requeueAfter
 }
 
 func debugCalculateSMTime(nhc *remediationv1alpha1.NodeHealthCheck) int64 {
