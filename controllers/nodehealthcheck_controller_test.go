@@ -1968,7 +1968,6 @@ var _ = Describe("Node Health Check CR", func() {
 				})
 				// TODO mshitrit check for recurring storms
 				It("should enter storm recovery when minHealthy is hit and exit when threshold is met", func() {
-					//TODO mshitrit fix unit test
 					//TODO mshitrit check remediation count
 					//Skip("need to fix")
 					var node *v1.Node

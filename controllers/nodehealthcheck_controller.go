@@ -936,8 +936,8 @@ func (r *NodeHealthCheckReconciler) shouldExistStormRecovery(nhc *remediationv1a
 func (r *NodeHealthCheckReconciler) shouldSetStormExitDelay(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	isActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
 	isHealthSatisfied := isMinHealthyConstraintSatisfied(nhc, minHealthy)
-	isDelayAlreadySet := nhc.Status.StormRegainingHealthyConstraintTime != nil
-	return isActive && isHealthSatisfied && isDelayAlreadySet
+	isDelayUnSet := nhc.Status.StormRegainingHealthyConstraintTime == nil
+	return isActive && isHealthSatisfied && isDelayUnSet
 }
 
 func isMinHealthyConstraintSatisfied(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
