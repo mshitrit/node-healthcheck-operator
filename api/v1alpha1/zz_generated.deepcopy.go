@@ -201,8 +201,8 @@ func (in *NodeHealthCheckStatus) DeepCopyInto(out *NodeHealthCheckStatus) {
 		in, out := &in.StormRecoveryStartTime, &out.StormRecoveryStartTime
 		*out = (*in).DeepCopy()
 	}
-	if in.StormRegainingHealthyConstraintTime != nil {
-		in, out := &in.StormRegainingHealthyConstraintTime, &out.StormRegainingHealthyConstraintTime
+	if in.StormTerminationStartTime != nil {
+		in, out := &in.StormTerminationStartTime, &out.StormTerminationStartTime
 		*out = (*in).DeepCopy()
 	}
 	if in.LastUpdateTime != nil {

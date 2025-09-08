@@ -299,16 +299,14 @@ type NodeHealthCheckStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	StormRecoveryStartTime *metav1.Time `json:"stormRecoveryStartTime,omitempty"`
 
-	//TODO mshitrit try finding a better name
-
-	// StormRegainingHealthyConstraintTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
+	// StormTerminationStartTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
 	// and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
 	//
 	//+optional
 	//+kubebuilder:validation:Type=string
 	//+kubebuilder:validation:Format=date-time
 	//+operator-sdk:csv:customresourcedefinitions:type=status
-	StormRegainingHealthyConstraintTime *metav1.Time `json:"stormRegainingHealthyConstraintTime,omitempty"`
+	StormTerminationStartTime *metav1.Time `json:"stormTerminationStartTime,omitempty"`
 
 	// LastUpdateTime is the last time the status was updated.
 	//

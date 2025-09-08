@@ -204,11 +204,11 @@ spec:
           how long the system has been in storm recovery mode.
         displayName: Storm Recovery Start Time
         path: stormRecoveryStartTime
-      - description: StormRegainingHealthyConstraintTime records when storm recovery
-          mode regained the minHealthy/maxUnhealthy constraint and the storm is about
-          to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
-        displayName: Storm Regaining Healthy Constraint Time
-        path: stormRegainingHealthyConstraintTime
+      - description: StormTerminationStartTime records when storm recovery mode regained
+          the minHealthy/maxUnhealthy constraint and the storm is about to end (after
+          NodeHealthCheckSpec.StormTerminationDelay has passed).
+        displayName: Storm Termination Start Time
+        path: stormTerminationStartTime
       - description: UnhealthyNodes tracks currently unhealthy nodes and their remediations.
         displayName: Unhealthy Nodes
         path: unhealthyNodes
