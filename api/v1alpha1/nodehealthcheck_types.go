@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// TODO mshitrit update the configuration md
 const (
 	// ConditionTypeDisabled is the condition type used when NHC will get disabled
 	ConditionTypeDisabled = "Disabled"
