@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// TODO mshitrit update the configuration md
 const (
 	// ConditionTypeDisabled is the condition type used when NHC will get disabled
 	ConditionTypeDisabled = "Disabled"
@@ -297,6 +298,8 @@ type NodeHealthCheckStatus struct {
 	//+kubebuilder:validation:Format=date-time
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	StormRecoveryStartTime *metav1.Time `json:"stormRecoveryStartTime,omitempty"`
+
+	//TODO mshitrit try finding a better name
 
 	// StormRegainingHealthyConstraintTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
 	// and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).

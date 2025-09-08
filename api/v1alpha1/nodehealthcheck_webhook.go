@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,7 +106,7 @@ func (v *customValidator) ValidateDelete(_ context.Context, obj runtime.Object) 
 }
 
 func (v *customValidator) validate(ctx context.Context, nhc *NodeHealthCheck) error {
-	aggregated := utilerrors.NewAggregate([]error{
+	aggregated := errors.NewAggregate([]error{
 		ValidateMinHealthyMaxUnhealthy(nhc),
 		v.validateSelector(nhc),
 		v.validateMutualRemediations(nhc),
@@ -152,7 +152,7 @@ func (v *customValidator) validateEscalatingRemediations(ctx context.Context, nh
 		return nil
 	}
 
-	aggregated := utilerrors.NewAggregate([]error{
+	aggregated := errors.NewAggregate([]error{
 		v.validateEscalatingRemediationsUniqueOrder(nhc),
 		v.validateEscalatingRemediationsTimeout(nhc),
 		v.validateEscalatingRemediationsUniqueRemediator(ctx, nhc),
@@ -261,29 +261,4 @@ func ValidateMinHealthyMaxUnhealthy(nhc *NodeHealthCheck) error {
 		}
 	}
 	return nil
-}
-
-func GetMinHealthy(nhc *NodeHealthCheck, total int) (int, error) {
-	err := ValidateMinHealthyMaxUnhealthy(nhc)
-	if err != nil {
-		return 0, err
-	}
-	if nhc.Spec.MinHealthy != nil {
-		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, total, true)
-		if minHealthy < 0 && err == nil {
-			err = fmt.Errorf("minHealthy is negative: %d", minHealthy)
-		}
-		return minHealthy, err
-	}
-	if nhc.Spec.MaxUnhealthy != nil {
-		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, total, true)
-		if maxUnhealthy < 0 && err == nil {
-			err = fmt.Errorf("maxUnhealthy is negative: %d", maxUnhealthy)
-		}
-		if maxUnhealthy > total && err == nil {
-			err = fmt.Errorf("maxUnhealthy is greater than the number of selected nodes: %d", maxUnhealthy)
-		}
-		return total - maxUnhealthy, err
-	}
-	return 0, fmt.Errorf("one of minHealthy and maxUnhealthy should be specified")
 }

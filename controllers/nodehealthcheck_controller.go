@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
@@ -334,7 +335,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// check if we have enough healthy nodes
 	skipRemediation := false
-	minHealthy, err := remediationv1alpha1.GetMinHealthy(nhc, len(selectedNodes))
+	minHealthy, err := getMinHealthy(nhc, len(selectedNodes))
 	if err != nil {
 		log.Error(err, "failed to calculate min healthy allowed nodes",
 			"minHealthy", nhc.Spec.MinHealthy, "maxUnhealthy", nhc.Spec.MaxUnhealthy, "observedNodes", nhc.Status.ObservedNodes)
@@ -350,6 +351,7 @@ func (r *NodeHealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	stormRecoveryActive, requeueAfter := r.evaluateStormRecovery(nhc, minHealthy)
 	updateRequeueAfter(&result, requeueAfter)
 
+	// skipping remediation due to active storm
 	if stormRecoveryActive && !skipRemediation {
 		msg := fmt.Sprint("Storm recovery active: skipping creation of new remediations")
 		r.Log.Info(msg)
@@ -895,6 +897,31 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 	if result.RequeueAfter == 0 || *newRequeueAfter < result.RequeueAfter {
 		result.RequeueAfter = *newRequeueAfter
 	}
+}
+
+func getMinHealthy(nhc *remediationv1alpha1.NodeHealthCheck, total int) (int, error) {
+	err := remediationv1alpha1.ValidateMinHealthyMaxUnhealthy(nhc)
+	if err != nil {
+		return 0, err
+	}
+	if nhc.Spec.MinHealthy != nil {
+		minHealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MinHealthy, total, true)
+		if minHealthy < 0 && err == nil {
+			err = fmt.Errorf("minHealthy is negative: %d", minHealthy)
+		}
+		return minHealthy, err
+	}
+	if nhc.Spec.MaxUnhealthy != nil {
+		maxUnhealthy, err := intstr.GetScaledValueFromIntOrPercent(nhc.Spec.MaxUnhealthy, total, true)
+		if maxUnhealthy < 0 && err == nil {
+			err = fmt.Errorf("maxUnhealthy is negative: %d", maxUnhealthy)
+		}
+		if maxUnhealthy > total && err == nil {
+			err = fmt.Errorf("maxUnhealthy is greater than the number of selected nodes: %d", maxUnhealthy)
+		}
+		return total - maxUnhealthy, err
+	}
+	return 0, fmt.Errorf("one of minHealthy and maxUnhealthy should be specified")
 }
 
 func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
