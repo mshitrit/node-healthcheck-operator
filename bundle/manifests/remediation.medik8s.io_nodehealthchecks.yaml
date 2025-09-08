@@ -453,12 +453,6 @@ spec:
               reason:
                 description: Reason explains the current phase in more detail.
                 type: string
-              stormRecoveryActive:
-                description: |-
-                  StormRecoveryActive indicates if storm recovery mode is currently active.
-                  Storm recovery mode is activated when the number of healthy nodes drops to or below minHealthy,
-                  and remediation is delayed until the number of unhealthy nodes reaches stormRecoveryThreshold.
-                type: boolean
               stormRecoveryStartTime:
                 description: |-
                   StormRecoveryStartTime records when storm recovery mode was activated.

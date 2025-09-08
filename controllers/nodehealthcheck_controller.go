@@ -898,7 +898,7 @@ func updateRequeueAfter(result *ctrl.Result, newRequeueAfter *time.Duration) {
 }
 
 func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	if ptr.Deref(nhc.Status.StormRecoveryActive, false) {
+	if utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange) {
 		return false
 	}
 
@@ -906,7 +906,7 @@ func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1a
 }
 
 func (r *NodeHealthCheckReconciler) shouldExistStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	isActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
+	isActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
 	isDelayElapsed := false
 	if nhc.Status.StormRegainingHealthyConstraintTime != nil {
 		isDelayElapsed = time.Now().After(nhc.Status.StormRegainingHealthyConstraintTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
@@ -916,7 +916,7 @@ func (r *NodeHealthCheckReconciler) shouldExistStormRecovery(nhc *remediationv1a
 }
 
 func (r *NodeHealthCheckReconciler) shouldSetStormExitDelay(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	isActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
+	isActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
 	isHealthSatisfied := isMinHealthyConstraintSatisfied(nhc, minHealthy)
 	isDelayUnSet := nhc.Status.StormRegainingHealthyConstraintTime == nil
 	return isActive && isHealthSatisfied && isDelayUnSet
@@ -951,9 +951,9 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		r.updateStormRecoveryStatus(nhc, false, setDelay)
 	}
 
-	isStormRecoveryActive := ptr.Deref(nhc.Status.StormRecoveryActive, false)
+	isStormActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
 
-	return isStormRecoveryActive, calculateRequeue(isStormRecoveryActive, nhc)
+	return isStormActive, calculateRequeue(isStormActive, nhc)
 }
 
 func calculateRequeue(active bool, nhc *remediationv1alpha1.NodeHealthCheck) *time.Duration {
@@ -992,10 +992,16 @@ const (
 )
 
 func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1alpha1.NodeHealthCheck, activate1 bool, sm stormMode) {
+
 	switch sm {
 	case activate:
 		{
-			nhc.Status.StormRecoveryActive = pointer.Bool(true)
+			meta.SetStatusCondition(&nhc.Status.Conditions, metav1.Condition{
+				Type:    remediationv1alpha1.ConditionTypeStormActive,
+				Status:  metav1.ConditionTrue,
+				Reason:  remediationv1alpha1.ConditionReasonStormThresholdChange,
+				Message: "Storm mode is activated preventing any remediations until done",
+			})
 			now := metav1.Time{Time: currentTime()}
 			nhc.Status.StormRecoveryStartTime = &now
 			r.Log.Info("Storm recovery mode activated", "nhc", nhc.Name)
@@ -1003,7 +1009,12 @@ func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1
 		}
 	case deactivate:
 		{
-			nhc.Status.StormRecoveryActive = pointer.Bool(false)
+			meta.SetStatusCondition(&nhc.Status.Conditions, metav1.Condition{
+				Type:    remediationv1alpha1.ConditionTypeStormActive,
+				Status:  metav1.ConditionFalse,
+				Reason:  remediationv1alpha1.ConditionReasonStormThresholdChange,
+				Message: "Storm mode is deactivated remediations can occur normally",
+			})
 			nhc.Status.StormRecoveryStartTime = nil
 			r.Log.Info("Storm recovery mode deactivated", "nhc", nhc.Name)
 			commonevents.NormalEvent(r.Recorder, nhc, "StormRecoveryEnded", "Storm recovery mode deactivated - normal remediation resumed")

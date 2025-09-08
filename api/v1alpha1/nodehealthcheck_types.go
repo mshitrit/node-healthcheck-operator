@@ -34,6 +34,11 @@ const (
 	ConditionReasonDisabledTemplateInvalid = "RemediationTemplateInvalid"
 	// ConditionReasonEnabled is the condition reason for type Disabled and status False
 	ConditionReasonEnabled = "NodeHealthCheckEnabled"
+
+	// ConditionTypeStormActive is the condition type used when NHC will get disabled
+	ConditionTypeStormActive = "StormActive"
+	// ConditionReasonStormThresholdChange is the condition reason for a storm change from active to inactive and vice versa
+	ConditionReasonStormThresholdChange = "HealthyNodeThresholdChange"
 )
 
 // NHCPhase is the string used for NHC.Status.Phase
@@ -282,16 +287,6 @@ type NodeHealthCheckStatus struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=status,xDescriptors="urn:alm:descriptor:io.kubernetes.phase:reason"
 	Reason string `json:"reason,omitempty"`
-
-	//TODO mshitrit move to a condition
-
-	// StormRecoveryActive indicates if storm recovery mode is currently active.
-	// Storm recovery mode is activated when the number of healthy nodes drops to or below minHealthy,
-	// and remediation is delayed until the number of unhealthy nodes reaches stormRecoveryThreshold.
-	//
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	StormRecoveryActive *bool `json:"stormRecoveryActive,omitempty"`
 
 	// StormRecoveryStartTime records when storm recovery mode was activated.
 	// This field is set when StormRecoveryActive becomes true and helps track
