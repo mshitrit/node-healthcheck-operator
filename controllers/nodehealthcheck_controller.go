@@ -971,11 +971,11 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 	shouldSetDelay := r.shouldSetStormExitDelay(nhc, minHealthy)
 	// Update storm recovery status
 	if shouldStart {
-		r.updateStormRecoveryStatus(nhc, true, activate)
+		r.updateStormRecoveryStatus(nhc, activate)
 	} else if shouldExit {
-		r.updateStormRecoveryStatus(nhc, false, deactivate)
+		r.updateStormRecoveryStatus(nhc, deactivate)
 	} else if shouldSetDelay {
-		r.updateStormRecoveryStatus(nhc, false, setDelay)
+		r.updateStormRecoveryStatus(nhc, setDelay)
 	}
 
 	isStormActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
@@ -1018,7 +1018,7 @@ const (
 	setDelay
 )
 
-func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1alpha1.NodeHealthCheck, activate1 bool, sm stormMode) {
+func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1alpha1.NodeHealthCheck, sm stormMode) {
 
 	switch sm {
 	case activate:
@@ -1049,7 +1049,7 @@ func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1
 	case setDelay:
 		now := metav1.Time{Time: currentTime()}
 		nhc.Status.StormTerminationStartTime = &now
-		r.Log.Info("Storm regained health staring delay count until storm ends", "nhc", nhc.Name)
+		r.Log.Info("Storm regained health starting delay count until storm ends", "nhc", nhc.Name)
 		commonevents.WarningEvent(r.Recorder, nhc, "StormRecoveryDelayStarted", "Storm recovery mode will exit after delay")
 	}
 
