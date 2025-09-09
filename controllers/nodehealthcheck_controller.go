@@ -1043,6 +1043,7 @@ func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1
 				Message: "Storm mode is deactivated remediations can occur normally",
 			})
 			nhc.Status.StormRecoveryStartTime = nil
+			nhc.Status.StormTerminationStartTime = nil
 			r.Log.Info("Storm recovery mode deactivated", "nhc", nhc.Name)
 			commonevents.NormalEvent(r.Recorder, nhc, "StormRecoveryEnded", "Storm recovery mode deactivated - normal remediation resumed")
 		}
