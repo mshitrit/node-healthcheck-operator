@@ -1977,7 +1977,7 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(getRemediationsCount(underTest)).To(Equal(3))
 					}, "5s", "1s").Should(Succeed())
 
-					// Phase 2: Make the forth node unhealthy - triggers first storm recovery
+					// Phase 2: Make the fourth node unhealthy - triggers first storm recovery
 					By("making one more node unhealthy - triggers storm recovery")
 					mockNodeGettingUnhealthy("healthy-worker-node-1")
 					// wait for node to turn unhealthy
@@ -2027,7 +2027,7 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(getRemediationsCount(underTest)).To(Equal(3))
 					}, "1500ms", "100ms").Should(Succeed())
 
-					// Phase 5:  Make the forth node unhealthy - triggers the second storm
+					// Phase 5:  Make the fourth node unhealthy - triggers the second storm
 					By("making the 4th node unhealthy - triggers second storm recovery")
 					mockNodeGettingUnhealthy("healthy-worker-node-2")
 					// wait for node to turn unhealthy

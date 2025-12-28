@@ -34,7 +34,6 @@ const (
 	ConditionReasonDisabledTemplateInvalid = "RemediationTemplateInvalid"
 	// ConditionReasonEnabled is the condition reason for type Disabled and status False
 	ConditionReasonEnabled = "NodeHealthCheckEnabled"
-
 	// ConditionTypeStormActive is the condition type used when NHC will get disabled
 	ConditionTypeStormActive = "StormActive"
 	// ConditionReasonStormThresholdChange is the condition reason for a storm change from active to inactive and vice versa
