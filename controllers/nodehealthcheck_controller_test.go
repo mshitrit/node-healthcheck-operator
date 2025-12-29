@@ -1960,8 +1960,10 @@ var _ = Describe("Node Health Check CR", func() {
 		})
 
 		Context("Storm Recovery", func() {
+
+			var stormTerminationDelay = time.Second * 2
 			BeforeEach(func() {
-				underTest = newNodeHealthCheckWithStormRecovery()
+				underTest = newNodeHealthCheckWithStormRecovery(stormTerminationDelay)
 				setupObjects(3, 4, true) // 2 unhealthy, 5 healthy = 7 total
 			})
 			When("consecutive storms are triggered", func() {
@@ -2017,7 +2019,7 @@ var _ = Describe("Node Health Check CR", func() {
 					//expected termination time of the first storm
 					firstStormTerminationTime := underTest.Status.StormTerminationStartTime.Time.Add(underTest.Spec.StormTerminationDelay.Duration)
 					// Phase 4: wait for the delay to pass
-					time.Sleep(time.Millisecond * 1500)
+					time.Sleep(stormTerminationDelay)
 					//Expect Storm Recovery mode to end
 					// 7 total, 4 healthy, 3 unhealthy, 3 remediations (pending remediation created when storm is done)
 					Eventually(func(g Gomega) {
@@ -2775,12 +2777,12 @@ func newNodeHealthCheck() *v1alpha1.NodeHealthCheck {
 	}
 }
 
-func newNodeHealthCheckWithStormRecovery() *v1alpha1.NodeHealthCheck {
+func newNodeHealthCheckWithStormRecovery(delay time.Duration) *v1alpha1.NodeHealthCheck {
 	nhc := newNodeHealthCheck()
 	// 7-node cluster: minHealthy=4, stormRecoveryThreshold=1
 	minHealthy := intstr.FromInt(4)
 	nhc.Spec.MinHealthy = &minHealthy
-	nhc.Spec.StormTerminationDelay = &metav1.Duration{Duration: 2 * time.Second}
+	nhc.Spec.StormTerminationDelay = &metav1.Duration{Duration: delay}
 	return nhc
 }
 
