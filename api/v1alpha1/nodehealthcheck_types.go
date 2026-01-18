@@ -113,12 +113,13 @@ type NodeHealthCheckSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	MaxUnhealthy *intstr.IntOrString `json:"maxUnhealthy,omitempty"`
 
-	// StormTerminationDelay introduces a configurable delay after storm recovery
-	// exit criteria are satisfied (for example, when the number of healthy nodes
-	// rises above the configured minHealthy constraint). While this
-	// delay is in effect, NHC remains in storm recovery mode and does not create
-	// new remediations. Once the delay elapses, storm recovery mode exits and normal
-	// remediation resumes.
+	// StormTerminationDelay defines the duration of an optional recovery phase after a storm.
+	// A "storm" happens when the number of (un)healthy nodes exceeds the threshold defined by minHealthy or maxUnhealthy.
+	// Sometimes this is triggered by a single root cause.
+	// When that cause is fixed, there is a risk to remediate healthy nodes:
+	// the async nature of node status updates would result in only some nodes being detected as healthy by NHC in a first round of updates,
+	// which results in minHealthy or maxUnhealthy threshold being fulfilled (the storm ends) and triggering unneeded new remediation.
+	// The storm recovery phase will prevent creation of new remediation for the given duration by giving NHC some time to get the latest node statuses.
 	//
 	// Expects a string of decimal numbers each with optional fraction and a unit
 	// suffix, e.g. "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us"
