@@ -923,6 +923,39 @@ func getMinHealthy(nhc *remediationv1alpha1.NodeHealthCheck, total int) (int, er
 	return 0, fmt.Errorf("one of minHealthy and maxUnhealthy should be specified")
 }
 
+type stormMode int
+
+const (
+	activate stormMode = iota
+	deactivate
+	setDelay
+)
+
+// evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
+func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) (bool, *time.Duration) {
+	if nhc.Spec.StormTerminationDelay == nil {
+		return false, nil
+	}
+	// Check if we should start storm recovery
+	shouldStart := r.shouldStartStormRecovery(nhc, minHealthy)
+	// Check if we should exit storm recovery now
+	shouldExit := r.shouldExitStormRecovery(nhc, minHealthy)
+	// Check if we should start the delay count for storm recovery exit
+	shouldSetDelay := r.shouldSetStormExitDelay(nhc, minHealthy)
+	// Update storm recovery status
+	if shouldStart {
+		r.updateStormRecoveryStatus(nhc, activate)
+	} else if shouldExit {
+		r.updateStormRecoveryStatus(nhc, deactivate)
+	} else if shouldSetDelay {
+		r.updateStormRecoveryStatus(nhc, setDelay)
+	}
+
+	isStormActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
+
+	return isStormActive, calculateStormTerminationRequeue(isStormActive, nhc)
+}
+
 func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	if utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange) {
 		return false
@@ -957,40 +990,7 @@ func isMinHealthyConstraintSatisfied(nhc *remediationv1alpha1.NodeHealthCheck, m
 	return healthyCount >= minHealthy
 }
 
-type stormMode int
-
-const (
-	activate stormMode = iota
-	deactivate
-	setDelay
-)
-
-// evaluateStormRecovery updates the state of the storm recover (active or not) and returns it current state
-func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) (bool, *time.Duration) {
-	if nhc.Spec.StormTerminationDelay == nil {
-		return false, nil
-	}
-	// Check if we should start storm recovery
-	shouldStart := r.shouldStartStormRecovery(nhc, minHealthy)
-	// Check if we should exit storm recovery now
-	shouldExit := r.shouldExitStormRecovery(nhc, minHealthy)
-	// Check if we should start the delay count for storm recovery exit
-	shouldSetDelay := r.shouldSetStormExitDelay(nhc, minHealthy)
-	// Update storm recovery status
-	if shouldStart {
-		r.updateStormRecoveryStatus(nhc, activate)
-	} else if shouldExit {
-		r.updateStormRecoveryStatus(nhc, deactivate)
-	} else if shouldSetDelay {
-		r.updateStormRecoveryStatus(nhc, setDelay)
-	}
-
-	isStormActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
-
-	return isStormActive, calculateRequeue(isStormActive, nhc)
-}
-
-func calculateRequeue(active bool, nhc *remediationv1alpha1.NodeHealthCheck) *time.Duration {
+func calculateStormTerminationRequeue(active bool, nhc *remediationv1alpha1.NodeHealthCheck) *time.Duration {
 	if !active || nhc.Status.StormTerminationStartTime == nil {
 		return nil
 	}
