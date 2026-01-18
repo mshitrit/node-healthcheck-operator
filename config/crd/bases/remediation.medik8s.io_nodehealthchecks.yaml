@@ -429,12 +429,6 @@ spec:
               reason:
                 description: Reason explains the current phase in more detail.
                 type: string
-              stormTerminationStartTime:
-                description: |-
-                  StormTerminationStartTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
-                  and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
-                format: date-time
-                type: string
               unhealthyNodes:
                 description: UnhealthyNodes tracks currently unhealthy nodes and their
                   remediations.

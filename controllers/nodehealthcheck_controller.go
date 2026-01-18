@@ -951,13 +951,13 @@ func (r *NodeHealthCheckReconciler) evaluateStormRecovery(nhc *remediationv1alph
 		r.updateStormRecoveryStatus(nhc, setDelay)
 	}
 
-	isStormActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
+	isStormActive := utils.IsConditionTrueAnyReason(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive)
 
 	return isStormActive, calculateStormTerminationRequeue(isStormActive, nhc)
 }
 
 func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	if utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange) {
+	if utils.IsConditionTrueAnyReason(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive) {
 		return false
 	}
 
@@ -965,19 +965,27 @@ func (r *NodeHealthCheckReconciler) shouldStartStormRecovery(nhc *remediationv1a
 }
 
 func (r *NodeHealthCheckReconciler) shouldExitStormRecovery(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
-	isActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
-	isDelayElapsed := false
-	if nhc.Status.StormTerminationStartTime != nil {
-		isDelayElapsed = time.Now().After(nhc.Status.StormTerminationStartTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
+	isActive := utils.IsConditionTrueAnyReason(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive)
+
+	if !isActive || !isMinHealthyConstraintSatisfied(nhc, minHealthy) {
+		return false
 	}
-	shouldExit := isActive && isMinHealthyConstraintSatisfied(nhc, minHealthy) && isDelayElapsed
-	return shouldExit
+
+	// Check if delay has elapsed by looking at LastTransitionTime of termination started condition
+	condition := meta.FindStatusCondition(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive)
+	if condition != nil && condition.Reason == remediationv1alpha1.ConditionReasonStormTerminationStarted {
+		isDelayElapsed := time.Now().After(condition.LastTransitionTime.Time.Add(nhc.Spec.StormTerminationDelay.Duration))
+		return isDelayElapsed
+	}
+
+	return false
 }
 
 func (r *NodeHealthCheckReconciler) shouldSetStormExitDelay(nhc *remediationv1alpha1.NodeHealthCheck, minHealthy int) bool {
 	isActive := utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormThresholdChange)
 	isHealthSatisfied := isMinHealthyConstraintSatisfied(nhc, minHealthy)
-	isDelayUnSet := nhc.Status.StormTerminationStartTime == nil
+	// Check if we're not already in termination delay phase
+	isDelayUnSet := !utils.IsConditionTrue(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive, remediationv1alpha1.ConditionReasonStormTerminationStarted)
 	return isActive && isHealthSatisfied && isDelayUnSet
 }
 
@@ -991,10 +999,16 @@ func isMinHealthyConstraintSatisfied(nhc *remediationv1alpha1.NodeHealthCheck, m
 }
 
 func calculateStormTerminationRequeue(active bool, nhc *remediationv1alpha1.NodeHealthCheck) *time.Duration {
-	if !active || nhc.Status.StormTerminationStartTime == nil {
+	if !active {
 		return nil
 	}
-	elapsedTime := time.Now().Sub(nhc.Status.StormTerminationStartTime.Time)
+
+	condition := meta.FindStatusCondition(nhc.Status.Conditions, remediationv1alpha1.ConditionTypeStormActive)
+	if condition == nil || condition.Reason != remediationv1alpha1.ConditionReasonStormTerminationStarted {
+		return nil
+	}
+
+	elapsedTime := time.Now().Sub(condition.LastTransitionTime.Time)
 	// time left before storm should finish
 	timeLeft := nhc.Spec.StormTerminationDelay.Duration - elapsedTime
 	//Add some requeue buffer
@@ -1029,14 +1043,19 @@ func (r *NodeHealthCheckReconciler) updateStormRecoveryStatus(nhc *remediationv1
 				Reason:  remediationv1alpha1.ConditionReasonStormThresholdChange,
 				Message: "Storm mode is deactivated remediations can occur normally",
 			})
-			nhc.Status.StormTerminationStartTime = nil
 			r.Log.Info("Storm recovery mode deactivated", "nhc", nhc.Name)
 			commonevents.NormalEvent(r.Recorder, nhc, "StormRecoveryEnded", "Storm recovery mode deactivated - normal remediation resumed")
 		}
 	case setDelay:
-		now := metav1.Time{Time: currentTime()}
-		nhc.Status.StormTerminationStartTime = &now
-		r.Log.Info("The cluster regained health after the storm, and it now begins a delay count until the storm is completely over", "nhc", nhc.Name)
-		commonevents.WarningEvent(r.Recorder, nhc, "StormRecoveryDelayStarted", "Storm recovery mode will exit after delay")
+		{
+			meta.SetStatusCondition(&nhc.Status.Conditions, metav1.Condition{
+				Type:    remediationv1alpha1.ConditionTypeStormActive,
+				Status:  metav1.ConditionTrue,
+				Reason:  remediationv1alpha1.ConditionReasonStormTerminationStarted,
+				Message: "Storm recovery exit delay started - waiting before resuming normal remediation",
+			})
+			r.Log.Info("The cluster regained health after the storm, and it now begins a delay count until the storm is completely over", "nhc", nhc.Name)
+			commonevents.WarningEvent(r.Recorder, nhc, "StormRecoveryDelayStarted", "Storm recovery mode will exit after delay")
+		}
 	}
 }

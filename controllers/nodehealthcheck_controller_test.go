@@ -2008,15 +2008,29 @@ var _ = Describe("Node Health Check CR", func() {
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
 					}, "5s", "100ms").Should(Succeed())
 					// 7 total, 4 healthy, 3 unhealthy, 2 remediations (one removed due to healthy node), 1 remediation is pending to be created (not created because of storm)
+
+					var stormTerminationStartTime time.Time
+					// Wait for condition to transition to StormTerminationStarted reason
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
+						stormActiveCondition := meta.FindStatusCondition(underTest.Status.Conditions, v1alpha1.ConditionTypeStormActive)
+						g.Expect(stormActiveCondition).ToNot(BeNil())
+						g.Expect(stormActiveCondition.Reason).To(Equal(v1alpha1.ConditionReasonStormTerminationStarted))
+						stormTerminationStartTime = stormActiveCondition.LastTransitionTime.Time
+					}, "5s", "100ms").Should(Succeed())
+
+					timeUntilStormIsDone := stormTerminationStartTime.Add(stormTerminationDelay).Sub(time.Now())
+
 					Consistently(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTest), underTest)).To(Succeed())
 						g.Expect(*underTest.Status.HealthyNodes).To(Equal(4))
 						g.Expect(len(underTest.Status.UnhealthyNodes)).To(Equal(3))
 						g.Expect(getRemediationsCount(underTest)).To(Equal(2))
-						g.Expect(utils.IsConditionTrue(underTest.Status.Conditions, v1alpha1.ConditionTypeStormActive, v1alpha1.ConditionReasonStormThresholdChange)).To(BeTrue())
-					}, stormTerminationDelay, "100ms").Should(Succeed())
+						g.Expect(utils.IsConditionTrue(underTest.Status.Conditions, v1alpha1.ConditionTypeStormActive, v1alpha1.ConditionReasonStormTerminationStarted)).To(BeTrue())
+					}, timeUntilStormIsDone-time.Millisecond*100, "100ms").Should(Succeed())
 					// Expected termination time of the first storm
-					firstStormTerminationTime := underTest.Status.StormTerminationStartTime.Time.Add(underTest.Spec.StormTerminationDelay.Duration)
+					stormActiveCondition := meta.FindStatusCondition(underTest.Status.Conditions, v1alpha1.ConditionTypeStormActive)
+					firstStormTerminationTime := stormActiveCondition.LastTransitionTime.Time.Add(underTest.Spec.StormTerminationDelay.Duration)
 
 					// Expect Storm Recovery mode to end
 					// 7 total, 4 healthy, 3 unhealthy, 3 remediations (pending remediation created when storm is done)
@@ -2047,8 +2061,8 @@ var _ = Describe("Node Health Check CR", func() {
 						stormActiveCondition := meta.FindStatusCondition(underTest.Status.Conditions, v1alpha1.ConditionTypeStormActive)
 						// Verifies StormRecoveryStartTime is updated properly when a second storm starts
 						g.Expect(stormActiveCondition.LastTransitionTime.After(firstStormTerminationTime)).To(BeTrue())
-						// Verifies StormTerminationStartTime of the first storm is cleared
-						g.Expect(underTest.Status.StormTerminationStartTime).To(BeNil())
+						// Verifies StormTerminationStartTime of the first storm is cleared (condition reason should not be StormTerminationStarted)
+						g.Expect(stormActiveCondition.Reason).ToNot(Equal(v1alpha1.ConditionReasonStormTerminationStarted))
 					}, "5s", "100ms").Should(Succeed())
 				})
 			})

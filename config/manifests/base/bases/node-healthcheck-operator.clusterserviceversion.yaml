@@ -159,11 +159,6 @@ spec:
         path: reason
         x-descriptors:
         - urn:alm:descriptor:io.kubernetes.phase:reason
-      - description: StormTerminationStartTime records when storm recovery mode regained
-          the minHealthy/maxUnhealthy constraint and the storm is about to end (after
-          NodeHealthCheckSpec.StormTerminationDelay has passed).
-        displayName: Storm Termination Start Time
-        path: stormTerminationStartTime
       - description: UnhealthyNodes tracks currently unhealthy nodes and their remediations.
         displayName: Unhealthy Nodes
         path: unhealthyNodes

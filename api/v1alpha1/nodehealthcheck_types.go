@@ -38,6 +38,8 @@ const (
 	ConditionTypeStormActive = "StormActive"
 	// ConditionReasonStormThresholdChange is the condition reason for a storm change from active to inactive and vice versa
 	ConditionReasonStormThresholdChange = "HealthyNodeThresholdChange"
+	// ConditionReasonStormTerminationStarted is the condition reason when storm recovery exit delay has started
+	ConditionReasonStormTerminationStarted = "StormTerminationStarted"
 )
 
 // NHCPhase is the string used for NHC.Status.Phase
@@ -286,15 +288,6 @@ type NodeHealthCheckStatus struct {
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=status,xDescriptors="urn:alm:descriptor:io.kubernetes.phase:reason"
 	Reason string `json:"reason,omitempty"`
-
-	// StormTerminationStartTime records when storm recovery mode regained the minHealthy/maxUnhealthy constraint
-	// and the storm is about to end (after NodeHealthCheckSpec.StormTerminationDelay has passed).
-	//
-	//+optional
-	//+kubebuilder:validation:Type=string
-	//+kubebuilder:validation:Format=date-time
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	StormTerminationStartTime *metav1.Time `json:"stormTerminationStartTime,omitempty"`
 
 	// LastUpdateTime is the last time the status was updated.
 	//
